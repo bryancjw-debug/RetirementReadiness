@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import { BadgeCheck, CircleAlert, Landmark, PiggyBank, RotateCcw, ShieldCheck, TrendingUp } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, CircleAlert, Landmark, ListChecks, PiggyBank, RotateCcw, ShieldCheck, SlidersHorizontal, TrendingUp } from "lucide-react";
 import { defaultInputs, projectRetirement } from "./utils/projection";
 import { formatCurrency, formatNumber, formatPercent } from "./utils/formatters";
 import type { CpfLifePlan, RetirementIncomeMethod, RetirementInputs, RetirementSumChoice, RetirementYear } from "./types";
@@ -38,6 +38,29 @@ const methods: Array<{
     id: "dynamic",
     title: "Percentage Drawdown",
     description: "Withdraw a percentage of the portfolio each year, adapting to market outcomes."
+  }
+];
+
+const guidedSteps = [
+  {
+    title: "About You",
+    helper: "Start with the ages. These set the timeline for the whole retirement check."
+  },
+  {
+    title: "What You Have Today",
+    helper: "Enter your cash, investments, and CPF balances. Estimates are okay for a first pass."
+  },
+  {
+    title: "What You Can Still Save",
+    helper: "Tell us what you can set aside before retirement."
+  },
+  {
+    title: "CPF LIFE",
+    helper: "CPF LIFE can be estimated, or you can enter the official CPF estimator payout."
+  },
+  {
+    title: "Retirement Spending",
+    helper: "Use today's dollars. The app will inflate this over time."
   }
 ];
 
@@ -227,7 +250,11 @@ function YearTable({ rows }: { rows: RetirementYear[] }) {
             <th>Passive Income</th>
             <th>CPF LIFE Income</th>
             <th>Spending Need</th>
-            <th>Drawdown</th>
+            <th>Total Drawdown</th>
+            <th>Cash Drawdown</th>
+            <th>Investment Drawdown</th>
+            <th>CPF SA Drawdown</th>
+            <th>CPF OA Drawdown</th>
             <th>Shortfall</th>
             <th>Ending Cash</th>
             <th>Ending Investments</th>
@@ -256,6 +283,10 @@ function YearTable({ rows }: { rows: RetirementYear[] }) {
               <td>{formatCurrency(row.cpfLifeIncome)}</td>
               <td>{formatCurrency(row.spendingNeed)}</td>
               <td>{formatCurrency(row.withdrawal)}</td>
+              <td>{formatCurrency(row.cashWithdrawal)}</td>
+              <td>{formatCurrency(row.investmentWithdrawal)}</td>
+              <td>{formatCurrency(row.cpfSaDrawdown)}</td>
+              <td>{formatCurrency(row.cpfOaDrawdown)}</td>
               <td>{formatCurrency(row.shortfall)}</td>
               <td>{formatCurrency(row.endingCashSavings)}</td>
               <td>{formatCurrency(row.endingInvestments)}</td>
@@ -274,9 +305,70 @@ function YearTable({ rows }: { rows: RetirementYear[] }) {
   );
 }
 
+function GuidedProgress({ step }: { step: number }) {
+  const pct = ((step + 1) / guidedSteps.length) * 100;
+  return (
+    <div className="guided-progress" aria-label={`Step ${step + 1} of ${guidedSteps.length}`}>
+      <div className="guided-progress__top">
+        <span>Step {step + 1} of {guidedSteps.length}</span>
+        <strong>{Math.round(pct)}% complete</strong>
+      </div>
+      <div className="guided-progress__bar">
+        <i style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function GuidedShell({
+  step,
+  children
+}: {
+  step: number;
+  children: ReactNode;
+}) {
+  const active = guidedSteps[step];
+  return (
+    <section className="guided-card">
+      <GuidedProgress step={step} />
+      <p className="eyebrow">Simple Retirement Checkup</p>
+      <h2>{active.title}</h2>
+      <p className="guided-card__helper">{active.helper}</p>
+      <div className="guided-card__body">{children}</div>
+    </section>
+  );
+}
+
+function GuidedPreview({ projection, inputs }: { projection: ReturnType<typeof projectRetirement>; inputs: RetirementInputs }) {
+  const isReady = projection.summary.status === "ready";
+  return (
+    <aside className={`guided-preview ${isReady ? "ready" : "not-ready"}`}>
+      <span className="guided-preview__pill">{isReady ? "On track" : "Needs attention"}</span>
+      <h3>{isReady ? "Ready through your projection age" : "Projected gap ahead"}</h3>
+      <p>{projection.summary.headline}</p>
+      <div className="guided-preview__stats">
+        <div>
+          <span>Runway</span>
+          <strong>Age {projection.summary.runwayAge}</strong>
+        </div>
+        <div>
+          <span>CPF LIFE / month</span>
+          <strong>{formatCurrency(projection.summary.cpfLifeMonthlyAtStart)}</strong>
+        </div>
+        <div>
+          <span>Projection ends</span>
+          <strong>Age {inputs.endAge}</strong>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 export default function App() {
   const [inputs, setInputs] = useState<RetirementInputs>(defaultInputs);
   const [showProjectionTable, setShowProjectionTable] = useState(false);
+  const [mode, setMode] = useState<"guided" | "advanced" | "results">("guided");
+  const [guidedStep, setGuidedStep] = useState(0);
 
   const projection = useMemo(() => projectRetirement(inputs), [inputs]);
   const chartRows = projection.rows.map((row) => ({
@@ -290,6 +382,7 @@ export default function App() {
     totalIncome: Math.round(row.passiveIncomeGenerated + row.cpfLifeIncome),
     spendingNeed: Math.round(row.spendingNeed),
     withdrawal: Math.round(row.withdrawal),
+    cpfDrawdown: Math.round(row.cpfDrawdown),
     shortfall: Math.round(row.shortfall)
   }));
   const retirementRow = projection.rows.find((row) => row.age === inputs.retirementAge);
@@ -299,58 +392,8 @@ export default function App() {
     setInputs((current) => ({ ...current, [key]: value }));
   }
 
-  return (
-    <main className="app-shell">
-      <section className="hero">
-        <div>
-          <p className="eyebrow">Standalone retirement projection</p>
-          <h1>RetirementReadiness</h1>
-          <p>
-            Estimate how long retirement funds may last by separating cash savings from investments, then testing
-            passive income, drawdown rules, and optional Singapore CPF LIFE income.
-          </p>
-        </div>
-        <button className="reset-button" type="button" onClick={() => setInputs(defaultInputs)}>
-          <RotateCcw size={16} />
-          Reset sample
-        </button>
-      </section>
-
-      <ReadinessBand projection={projection} />
-
-      <section className="metric-grid">
-        <MetricCard
-          icon={<ShieldCheck size={18} />}
-          label="Readiness"
-          value={projection.summary.status === "ready" ? "Ready" : "Not Ready"}
-          note={projection.summary.headline}
-          tone={readinessTone}
-        />
-        <MetricCard
-          icon={<Landmark size={18} />}
-          label="Final Balance"
-          value={formatCurrency(projection.summary.finalBalance, { compact: true })}
-          note={`At age ${inputs.endAge}`}
-          tone="good"
-        />
-        <MetricCard
-          icon={<TrendingUp size={18} />}
-          label="Peak Portfolio"
-          value={formatCurrency(projection.summary.peakBalance, { compact: true })}
-          note={`Age ${projection.summary.peakBalanceAge}`}
-          tone="blue"
-        />
-        <MetricCard
-          icon={<PiggyBank size={18} />}
-          label="Income Coverage"
-          value={formatPercent(projection.summary.incomeCoverageAtRetirement)}
-          note="At retirement age"
-          tone={projection.summary.incomeCoverageAtRetirement >= 100 ? "good" : "warn"}
-        />
-      </section>
-
-      <div className="workspace">
-        <aside className="input-panel">
+  const advancedInputs = (
+    <aside className="input-panel">
           <SectionCard eyebrow="Step 1" title="Build-Up Phase">
             <div className="field-grid">
               <NumberField label="Current Age" value={inputs.currentAge} onChange={(value) => updateInput("currentAge", value)} />
@@ -571,18 +614,54 @@ export default function App() {
             </div>
           </SectionCard>
         </aside>
+  );
 
-        <section className="results-panel">
-          <div className="chart-card chart-card--large">
-            <div className="chart-card__header">
-              <div>
-                <p className="eyebrow">Projection</p>
-                <h2>Retirement Funds By Age</h2>
-              </div>
-              <span>Peak {formatCurrency(projection.summary.peakBalance, { compact: true })}</span>
+  const resultsContent = (
+    <>
+      <ReadinessBand projection={projection} />
+
+      <section className="metric-grid">
+        <MetricCard
+          icon={<ShieldCheck size={18} />}
+          label="Readiness"
+          value={projection.summary.status === "ready" ? "Ready" : "Not Ready"}
+          note={projection.summary.headline}
+          tone={readinessTone}
+        />
+        <MetricCard
+          icon={<Landmark size={18} />}
+          label="Final Balance"
+          value={formatCurrency(projection.summary.finalBalance, { compact: true })}
+          note={`At age ${inputs.endAge}`}
+          tone="good"
+        />
+        <MetricCard
+          icon={<TrendingUp size={18} />}
+          label="Peak Portfolio"
+          value={formatCurrency(projection.summary.peakBalance, { compact: true })}
+          note={`Age ${projection.summary.peakBalanceAge}`}
+          tone="blue"
+        />
+        <MetricCard
+          icon={<PiggyBank size={18} />}
+          label="Income Coverage"
+          value={formatPercent(projection.summary.incomeCoverageAtRetirement)}
+          note="At retirement age"
+          tone={projection.summary.incomeCoverageAtRetirement >= 100 ? "good" : "warn"}
+        />
+      </section>
+
+      <section className="results-panel">
+        <div className="chart-card chart-card--large">
+          <div className="chart-card__header">
+            <div>
+              <p className="eyebrow">Projection</p>
+              <h2>Retirement Funds By Age</h2>
             </div>
-            <div className="chart-frame">
-              <div className="chart-frame__inner">
+            <span>Peak {formatCurrency(projection.summary.peakBalance, { compact: true })}</span>
+          </div>
+          <div className="chart-frame">
+            <div className="chart-frame__inner">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartRows} margin={{ top: 10, right: 18, left: 0, bottom: 8 }}>
                   <defs>
@@ -596,98 +675,51 @@ export default function App() {
                   <YAxis tickFormatter={(value) => formatCurrency(Number(value), { compact: true })} tickLine={false} axisLine={false} />
                   <Tooltip content={<CustomTooltip />} />
                   <ReferenceLine x={inputs.retirementAge} stroke="#f2bb4c" strokeDasharray="4 4" />
-                  <Area
-                    dataKey="cashSavings"
-                    name="Cash Savings"
-                    type="monotone"
-                    stackId="funds"
-                    stroke="#57b0ad"
-                    strokeWidth={2}
-                    fill="#57b0ad"
-                    fillOpacity={0.28}
-                  />
-                  <Area
-                    dataKey="investments"
-                    name="Investments"
-                    type="monotone"
-                    stackId="funds"
-                    stroke="#f2bb4c"
-                    strokeWidth={2}
-                    fill="url(#portfolioFill)"
-                  />
+                  <Area dataKey="cashSavings" name="Cash Savings" type="monotone" stackId="funds" stroke="#57b0ad" strokeWidth={2} fill="#57b0ad" fillOpacity={0.28} />
+                  <Area dataKey="investments" name="Investments" type="monotone" stackId="funds" stroke="#f2bb4c" strokeWidth={2} fill="url(#portfolioFill)" />
                   {inputs.includeCpf ? (
-                    <Area
-                      dataKey="cpfBalances"
-                      name="CPF Balances"
-                      type="monotone"
-                      stackId="funds"
-                      stroke="#8db7ff"
-                      strokeWidth={2}
-                      fill="#8db7ff"
-                      fillOpacity={0.2}
-                    />
+                    <Area dataKey="cpfBalances" name="CPF Balances" type="monotone" stackId="funds" stroke="#8db7ff" strokeWidth={2} fill="#8db7ff" fillOpacity={0.2} />
                   ) : null}
                 </AreaChart>
               </ResponsiveContainer>
-              </div>
             </div>
           </div>
+        </div>
 
-          <div className="two-column">
-            <div className="chart-card">
-              <div className="chart-card__header">
-                <div>
-                  <p className="eyebrow">Retirement</p>
-                  <h2>Income Versus Spending</h2>
-                </div>
+        <div className="two-column">
+          <div className="chart-card">
+            <div className="chart-card__header">
+              <div>
+                <p className="eyebrow">Retirement</p>
+                <h2>Income Versus Spending</h2>
               </div>
-              <div className="chart-frame chart-frame--small">
-                <div className="chart-frame__inner">
+            </div>
+            <div className="chart-frame chart-frame--small">
+              <div className="chart-frame__inner">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartRows} margin={{ top: 10, right: 16, left: 0, bottom: 8 }}>
                     <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
                     <XAxis dataKey="age" tickLine={false} axisLine={false} />
                     <YAxis tickFormatter={(value) => formatCurrency(Number(value), { compact: true })} tickLine={false} axisLine={false} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Line
-                      dataKey="totalIncome"
-                      name="Total Income"
-                      type="monotone"
-                      stroke="#67d391"
-                      strokeWidth={3}
-                      dot={false}
-                    />
-                    <Line
-                      dataKey="spendingNeed"
-                      name="Spending Need"
-                      type="monotone"
-                      stroke="#ff7b7b"
-                      strokeWidth={3}
-                      dot={false}
-                    />
-                    <Line
-                      dataKey="withdrawal"
-                      name="Drawdown"
-                      type="monotone"
-                      stroke="#8db7ff"
-                      strokeWidth={3}
-                      dot={false}
-                    />
+                    <Line dataKey="totalIncome" name="Total Income" type="monotone" stroke="#67d391" strokeWidth={3} dot={false} />
+                    <Line dataKey="spendingNeed" name="Spending Need" type="monotone" stroke="#ff7b7b" strokeWidth={3} dot={false} />
+                    <Line dataKey="withdrawal" name="Total Drawdown Used" type="monotone" stroke="#8db7ff" strokeWidth={3} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
-                </div>
               </div>
             </div>
+          </div>
 
-            <div className="chart-card">
-              <div className="chart-card__header">
-                <div>
-                  <p className="eyebrow">Gaps</p>
-                  <h2>Annual Shortfall</h2>
-                </div>
+          <div className="chart-card">
+            <div className="chart-card__header">
+              <div>
+                <p className="eyebrow">Gaps</p>
+                <h2>Annual Shortfall</h2>
               </div>
-              <div className="chart-frame chart-frame--small">
-                <div className="chart-frame__inner">
+            </div>
+            <div className="chart-frame chart-frame--small">
+              <div className="chart-frame__inner">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartRows} margin={{ top: 10, right: 16, left: 0, bottom: 8 }}>
                     <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
@@ -701,64 +733,224 @@ export default function App() {
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-                </div>
               </div>
             </div>
           </div>
+        </div>
 
-          <section className="math-card">
-            <div>
-              <p className="eyebrow">Show the math</p>
-              <h2>Retirement Projection Summary</h2>
-            </div>
-            <div className="math-grid">
-              <span>Total Contributions</span>
-              <strong>{formatCurrency(projection.summary.totalContributed)}</strong>
-              <span>Total Savings Interest</span>
-              <strong>{formatCurrency(projection.summary.totalSavingsInterest)}</strong>
-              <span>Total Growth</span>
-              <strong>{formatCurrency(projection.summary.totalGrowth)}</strong>
-              <span>Total Passive Income</span>
-              <strong>{formatCurrency(projection.summary.totalPassiveIncome)}</strong>
-              <span>Total CPF LIFE Income</span>
-              <strong>{formatCurrency(projection.summary.totalCpfLifeIncome)}</strong>
-              <span>Total Drawdown</span>
-              <strong>{formatCurrency(projection.summary.totalWithdrawn)}</strong>
-              <span>Total Unfunded Shortfall</span>
-              <strong className={projection.summary.totalShortfall > 0 ? "negative" : "positive"}>
-                {formatCurrency(projection.summary.totalShortfall)}
-              </strong>
-              <span>Funds At Retirement</span>
-              <strong>{formatCurrency(retirementRow?.openingBalance ?? 0)}</strong>
-            </div>
-            <p className="math-note">
-              Cash savings earn the cash interest rate. Investments earn the investment return before retirement, then
-              the retirement capital growth rate after retirement. Future one-time capital injections are added only if
-              enabled. CPF LIFE, when enabled, reduces the retirement spending gap as an income stream. Retirement
-              spending is entered in today's dollars and inflated annually. Figures are estimates, not financial advice.
-            </p>
-          </section>
-
-          <section className={`table-card table-card--collapsible ${showProjectionTable ? "is-open" : ""}`}>
-            <div className="chart-card__header">
-              <div>
-                <p className="eyebrow">Year-by-year data</p>
-                <h2>Projection Table</h2>
-              </div>
-              <button className="table-toggle" type="button" onClick={() => setShowProjectionTable((current) => !current)}>
-                {showProjectionTable ? "Hide table" : `View ${formatNumber(projection.rows.length)} rows`}
-              </button>
-            </div>
-            {showProjectionTable ? (
-              <YearTable rows={projection.rows} />
-            ) : (
-              <p className="math-note">
-                The full year-by-year table is available when needed, but hidden by default so the main retirement story stays clear.
-              </p>
-            )}
-          </section>
+        <section className="math-card">
+          <div>
+            <p className="eyebrow">Show the math</p>
+            <h2>Retirement Projection Summary</h2>
+          </div>
+          <div className="math-grid">
+            <span>Total Contributions</span>
+            <strong>{formatCurrency(projection.summary.totalContributed)}</strong>
+            <span>Total Savings Interest</span>
+            <strong>{formatCurrency(projection.summary.totalSavingsInterest)}</strong>
+            <span>Total Growth</span>
+            <strong>{formatCurrency(projection.summary.totalGrowth)}</strong>
+            <span>Total Passive Income</span>
+            <strong>{formatCurrency(projection.summary.totalPassiveIncome)}</strong>
+            <span>Total CPF LIFE Income</span>
+            <strong>{formatCurrency(projection.summary.totalCpfLifeIncome)}</strong>
+            <span>Total Drawdown</span>
+            <strong>{formatCurrency(projection.summary.totalWithdrawn)}</strong>
+            <span>Total CPF SA/OA Drawdown</span>
+            <strong>{formatCurrency(projection.summary.totalCpfDrawdown)}</strong>
+            <span>Total Unfunded Shortfall</span>
+            <strong className={projection.summary.totalShortfall > 0 ? "negative" : "positive"}>{formatCurrency(projection.summary.totalShortfall)}</strong>
+            <span>Funds At Retirement</span>
+            <strong>{formatCurrency(retirementRow?.openingBalance ?? 0)}</strong>
+          </div>
+          <p className="math-note">
+            Cash savings earn the cash interest rate. Investments earn the investment return before retirement, then
+            the retirement capital growth rate after retirement. CPF LIFE, when enabled, reduces the retirement spending
+            gap as an income stream. Drawdown funds retirement gaps from cash savings first, then investments, then CPF SA
+            and CPF OA if CPF is enabled. CPF MA, CPF RA, and CPF LIFE reserve are not treated as freely spendable drawdown balances.
+          </p>
         </section>
-      </div>
+
+        <section className={`table-card table-card--collapsible ${showProjectionTable ? "is-open" : ""}`}>
+          <div className="chart-card__header">
+            <div>
+              <p className="eyebrow">Year-by-year data</p>
+              <h2>Projection Table</h2>
+            </div>
+            <button className="table-toggle" type="button" onClick={() => setShowProjectionTable((current) => !current)}>
+              {showProjectionTable ? "Hide table" : `View ${formatNumber(projection.rows.length)} rows`}
+            </button>
+          </div>
+          {showProjectionTable ? (
+            <YearTable rows={projection.rows} />
+          ) : (
+            <p className="math-note">
+              The full year-by-year table is available when needed, but hidden by default so the main retirement story stays clear.
+            </p>
+          )}
+        </section>
+      </section>
+    </>
+  );
+
+  const guidedContent = (
+    <div className="guided-layout">
+      <GuidedShell step={guidedStep}>
+        {guidedStep === 0 ? (
+          <div className="guided-fields">
+            <NumberField label="How Old Are You Now?" value={inputs.currentAge} onChange={(value) => updateInput("currentAge", value)} />
+            <NumberField label="When Do You Want To Retire?" value={inputs.retirementAge} onChange={(value) => updateInput("retirementAge", value)} />
+            <NumberField label="Plan Until What Age?" helper="Use 90 or 100 if unsure." value={inputs.endAge} onChange={(value) => updateInput("endAge", value)} />
+          </div>
+        ) : null}
+        {guidedStep === 1 ? (
+          <div className="guided-fields">
+            <NumberField label="Cash Savings Today" helper="Bank savings or cash you can use." prefix="$" value={inputs.currentCashSavings} onChange={(value) => updateInput("currentCashSavings", value)} />
+            <NumberField label="Investments Today" helper="Stocks, funds, ETFs, bonds, or portfolios." prefix="$" value={inputs.currentInvestments} onChange={(value) => updateInput("currentInvestments", value)} />
+            <ToggleRow title="Include CPF Balances" description="Recommended for Singapore retirement planning." checked={inputs.includeCpf} onChange={(checked) => updateInput("includeCpf", checked)} />
+            {inputs.includeCpf ? (
+              <div className="guided-subgrid">
+                <NumberField label="CPF OA" prefix="$" value={inputs.cpfOa} onChange={(value) => updateInput("cpfOa", value)} />
+                <NumberField label="CPF SA" prefix="$" value={inputs.cpfSa} onChange={(value) => updateInput("cpfSa", value)} />
+                <NumberField label="CPF MA" prefix="$" value={inputs.cpfMa} onChange={(value) => updateInput("cpfMa", value)} />
+                <NumberField label="CPF RA" helper="Leave 0 if not formed yet." prefix="$" value={inputs.cpfRa} onChange={(value) => updateInput("cpfRa", value)} />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        {guidedStep === 2 ? (
+          <div className="guided-fields">
+            <NumberField label="Monthly Cash Savings" prefix="$" value={inputs.cashSavingsContribution} onChange={(value) => updateInput("cashSavingsContribution", value)} />
+            <NumberField label="Monthly Investment Amount" prefix="$" value={inputs.investmentContribution} onChange={(value) => updateInput("investmentContribution", value)} />
+            <NumberField label="Yearly Increase In Savings" suffix="%" step={0.1} value={inputs.annualContributionIncreaseRate} onChange={(value) => updateInput("annualContributionIncreaseRate", value)} />
+            <NumberField label="Cash Interest" helper="For cash savings only." suffix="%" step={0.1} value={inputs.cashInterestRate} onChange={(value) => updateInput("cashInterestRate", value)} />
+            <NumberField label="Investment Return Before Retirement" helper="For invested assets only." suffix="%" step={0.1} value={inputs.preRetirementInvestmentReturnRate} onChange={(value) => updateInput("preRetirementInvestmentReturnRate", value)} />
+          </div>
+        ) : null}
+        {guidedStep === 3 ? (
+          <div className="guided-fields">
+            <ToggleRow title="Include CPF LIFE" description="CPF LIFE can provide monthly income from your payout start age." checked={inputs.includeCpf} onChange={(checked) => updateInput("includeCpf", checked)} />
+            {inputs.includeCpf ? (
+              <>
+                <div className="cpf-preview">
+                  <div>
+                    <span>Estimated Retirement Sum At 55</span>
+                    <strong>{formatCurrency(projection.summary.cpfRetirementSumAt55)}</strong>
+                  </div>
+                  <div>
+                    <span>Estimated Monthly CPF LIFE</span>
+                    <strong>{formatCurrency(projection.summary.cpfLifeMonthlyAtStart)}</strong>
+                  </div>
+                </div>
+                <div className="guided-subgrid">
+                  <NumberField label="CPF LIFE Start Age" value={inputs.cpfLifeStartAge} onChange={(value) => updateInput("cpfLifeStartAge", value)} />
+                  <label className="field">
+                    <span>Retirement Sum</span>
+                    <select value={inputs.cpfRetirementSum} onChange={(event) => updateInput("cpfRetirementSum", event.target.value as RetirementSumChoice)}>
+                      <option value="Basic">Basic Retirement Sum</option>
+                      <option value="Full">Full Retirement Sum</option>
+                      <option value="Enhanced">Enhanced Retirement Sum</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>CPF LIFE Plan</span>
+                    <select value={inputs.cpfLifePlan} onChange={(event) => updateInput("cpfLifePlan", event.target.value as CpfLifePlan)}>
+                      <option value="Standard">Standard</option>
+                      <option value="Basic">Basic</option>
+                      <option value="Escalating">Escalating</option>
+                    </select>
+                  </label>
+                  <NumberField label="CPF Official Monthly Payout" helper="Optional. Enter CPF's estimator result if you have it." prefix="$" value={inputs.cpfLifeMonthlyOverride} onChange={(value) => updateInput("cpfLifeMonthlyOverride", value)} />
+                </div>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+        {guidedStep === 4 ? (
+          <div className="guided-fields">
+            <NumberField label="Expected Yearly Spending In Retirement" helper="Use today's dollars. Example: $48,000 means about $4,000/month today." prefix="$" value={inputs.retirementSpendingAnnual} onChange={(value) => updateInput("retirementSpendingAnnual", value)} />
+            <NumberField label="Spending Inflation" suffix="%" step={0.1} value={inputs.retirementSpendingInflationRate} onChange={(value) => updateInput("retirementSpendingInflationRate", value)} />
+            <NumberField label="Investment Growth During Retirement" suffix="%" step={0.1} value={inputs.retirementReturnRate} onChange={(value) => updateInput("retirementReturnRate", value)} />
+            <NumberField label="Passive Income Yield" helper="Dividends, coupons, rent, or portfolio income if applicable." suffix="%" step={0.1} value={inputs.passiveIncomeYieldRate} onChange={(value) => updateInput("passiveIncomeYieldRate", value)} />
+            <MethodSelector selected={inputs.retirementIncomeMethod} onChange={(method) => updateInput("retirementIncomeMethod", method)} />
+          </div>
+        ) : null}
+      </GuidedShell>
+      <GuidedPreview projection={projection} inputs={inputs} />
+    </div>
+  );
+
+  return (
+    <main className="app-shell">
+      <section className="hero">
+        <div>
+          <p className="eyebrow">Standalone retirement projection</p>
+          <h1>RetirementReadiness</h1>
+          <p>
+            A simple retirement checkup for Singapore users. Answer one step at a time, then review the readiness indicator,
+            charts, and full calculation table only when you need the details.
+          </p>
+        </div>
+        <div className="hero-actions">
+          <button className="reset-button" type="button" onClick={() => setInputs(defaultInputs)}>
+            <RotateCcw size={16} />
+            Reset sample
+          </button>
+        </div>
+      </section>
+
+      <nav className="mode-tabs" aria-label="RetirementReadiness views">
+        <button className={mode === "guided" ? "is-active" : ""} type="button" onClick={() => setMode("guided")}>
+          <ListChecks size={18} />
+          Guided Checkup
+        </button>
+        <button className={mode === "advanced" ? "is-active" : ""} type="button" onClick={() => setMode("advanced")}>
+          <SlidersHorizontal size={18} />
+          Advanced Inputs
+        </button>
+        <button className={mode === "results" ? "is-active" : ""} type="button" onClick={() => setMode("results")}>
+          <ShieldCheck size={18} />
+          Results
+        </button>
+      </nav>
+
+      {mode === "guided" ? (
+        <>
+          {guidedContent}
+          <div className="guided-actions">
+            <button className="reset-button" type="button" disabled={guidedStep === 0} onClick={() => setGuidedStep((step) => Math.max(0, step - 1))}>
+              <ArrowLeft size={16} />
+              Back
+            </button>
+            {guidedStep < guidedSteps.length - 1 ? (
+              <button className="primary-action" type="button" onClick={() => setGuidedStep((step) => Math.min(guidedSteps.length - 1, step + 1))}>
+                Next
+                <ArrowRight size={16} />
+              </button>
+            ) : (
+              <button className="primary-action" type="button" onClick={() => setMode("results")}>
+                Show My Readiness
+                <ArrowRight size={16} />
+              </button>
+            )}
+          </div>
+        </>
+      ) : null}
+
+      {mode === "advanced" ? (
+        <div className="workspace workspace--advanced">
+          {advancedInputs}
+          <div className="advanced-side">
+            <GuidedPreview projection={projection} inputs={inputs} />
+            <button className="primary-action primary-action--full" type="button" onClick={() => setMode("results")}>
+              Show Results
+              <ArrowRight size={16} />
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {mode === "results" ? resultsContent : null}
     </main>
   );
 }

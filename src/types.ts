@@ -54,6 +54,11 @@ export interface RetirementYear {
   passiveIncomeGenerated: number;
   cpfLifeIncome: number;
   spendingNeed: number;
+  cashWithdrawal: number;
+  investmentWithdrawal: number;
+  cpfSaDrawdown: number;
+  cpfOaDrawdown: number;
+  cpfDrawdown: number;
   withdrawal: number;
   shortfall: number;
   endingCashSavings: number;
@@ -81,6 +86,7 @@ export interface RetirementSummary {
   totalSavingsInterest: number;
   totalGrowth: number;
   totalWithdrawn: number;
+  totalCpfDrawdown: number;
   totalPassiveIncome: number;
   totalCpfLifeIncome: number;
   totalShortfall: number;

@@ -158,4 +158,82 @@ describe("projectRetirement", () => {
 
     expect(enhanced.summary.cpfLifeMonthlyAtStart).toBeGreaterThan(full.summary.cpfLifeMonthlyAtStart);
   });
+
+  it("uses CPF LIFE monthly override from the official estimator when supplied", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 62,
+      retirementAge: 65,
+      endAge: 66,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      includeCpf: true,
+      cpfOa: 0,
+      cpfSa: 0,
+      cpfMa: 0,
+      cpfRa: 314_018,
+      cpfLifeStartAge: 65,
+      cpfRetirementSum: "Full",
+      cpfLifePlan: "Standard",
+      cpfLifeMonthlyOverride: 1900
+    });
+
+    expect(projection.summary.cpfLifeMonthlyAtStart).toBeCloseTo(1900, 0);
+    expect(projection.rows.find((row) => row.age === 65)?.cpfLifeIncome).toBeCloseTo(22_800, 0);
+    expect(projection.rows.find((row) => row.age === 66)?.cpfLifeIncome).toBeCloseTo(22_800, 0);
+  });
+
+  it("uses CPF OA drawdown before reporting a true retirement shortfall", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 64,
+      retirementAge: 65,
+      endAge: 70,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      includeCpf: true,
+      cpfOa: 120_000,
+      cpfSa: 0,
+      cpfMa: 50_000,
+      cpfRa: 600_000,
+      cpfLifeStartAge: 70,
+      retirementSpendingAnnual: 100_000,
+      passiveIncomeYieldRate: 0
+    });
+
+    const retirementYear = projection.rows.find((row) => row.age === 65)!;
+    expect(retirementYear.cpfOaDrawdown).toBeCloseTo(retirementYear.spendingNeed, 0);
+    expect(retirementYear.cpfDrawdown).toBeCloseTo(retirementYear.spendingNeed, 0);
+    expect(retirementYear.shortfall).toBe(0);
+  });
+
+  it("does not use CPF MediSave as retirement drawdown funding", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 64,
+      retirementAge: 65,
+      endAge: 70,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      includeCpf: true,
+      cpfOa: 0,
+      cpfSa: 0,
+      cpfMa: 200_000,
+      cpfRa: 600_000,
+      cpfLifeStartAge: 70,
+      retirementSpendingAnnual: 100_000,
+      passiveIncomeYieldRate: 0
+    });
+
+    const retirementYear = projection.rows.find((row) => row.age === 65)!;
+    expect(retirementYear.cpfDrawdown).toBe(0);
+    expect(retirementYear.cpfMa).toBeGreaterThan(200_000);
+    expect(retirementYear.shortfall).toBeGreaterThan(0);
+  });
 });

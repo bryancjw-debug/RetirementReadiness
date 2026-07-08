@@ -313,7 +313,17 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       Math.max(desiredWithdrawal - cashWithdrawal, 0),
       investmentsAvailableForWithdrawal
     );
-    const withdrawal = cashWithdrawal + investmentWithdrawal;
+    const gapAfterCashAndInvestments = phase === "retirement"
+      ? Math.max(spendingNeed - retirementIncome - cashWithdrawal - investmentWithdrawal, 0)
+      : 0;
+    const cpfSaDrawdown = inputs.includeCpf ? Math.min(cpf.sa, gapAfterCashAndInvestments) : 0;
+    cpf.sa -= cpfSaDrawdown;
+    const cpfOaDrawdown = inputs.includeCpf
+      ? Math.min(cpf.oa, Math.max(gapAfterCashAndInvestments - cpfSaDrawdown, 0))
+      : 0;
+    cpf.oa -= cpfOaDrawdown;
+    const cpfDrawdown = cpfSaDrawdown + cpfOaDrawdown;
+    const withdrawal = cashWithdrawal + investmentWithdrawal + cpfDrawdown;
     const shortfall = phase === "retirement"
       ? Math.max(spendingNeed - retirementIncome - withdrawal, 0)
       : 0;
@@ -356,6 +366,11 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       passiveIncomeGenerated,
       cpfLifeIncome,
       spendingNeed,
+      cashWithdrawal,
+      investmentWithdrawal,
+      cpfSaDrawdown,
+      cpfOaDrawdown,
+      cpfDrawdown,
       withdrawal,
       shortfall,
       endingCashSavings,
@@ -382,6 +397,7 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
   const totalSavingsInterest = rows.reduce((sum, row) => sum + row.savingsInterest, 0);
   const totalGrowth = rows.reduce((sum, row) => sum + row.investmentGrowth, 0);
   const totalWithdrawn = rows.reduce((sum, row) => sum + row.withdrawal, 0);
+  const totalCpfDrawdown = rows.reduce((sum, row) => sum + row.cpfDrawdown, 0);
   const totalPassiveIncome = rows.reduce((sum, row) => sum + row.passiveIncomeGenerated, 0);
   const totalCpfLifeIncome = rows.reduce((sum, row) => sum + row.cpfLifeIncome, 0);
   const totalShortfall = rows.reduce((sum, row) => sum + row.shortfall, 0);
@@ -406,6 +422,7 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     totalSavingsInterest,
     totalGrowth,
     totalWithdrawn,
+    totalCpfDrawdown,
     totalPassiveIncome,
     totalCpfLifeIncome,
     totalShortfall,
