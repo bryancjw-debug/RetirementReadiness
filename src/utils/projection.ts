@@ -164,6 +164,7 @@ export function sanitizeInputs(inputs: RetirementInputs): RetirementInputs {
     currentInvestments: clampNonNegative(inputs.currentInvestments),
     cashSavingsContribution: clampNonNegative(inputs.cashSavingsContribution),
     investmentContribution: clampNonNegative(inputs.investmentContribution),
+    contributionFrequency: "monthly",
     annualContributionIncreaseRate: Number.isFinite(inputs.annualContributionIncreaseRate)
       ? inputs.annualContributionIncreaseRate
       : 0,
@@ -190,7 +191,7 @@ export function sanitizeInputs(inputs: RetirementInputs): RetirementInputs {
 
 function calculateAnnualContribution(inputs: RetirementInputs, age: number, amount: number): number {
   if (age >= inputs.retirementAge) return 0;
-  const annualBase = amount * (inputs.contributionFrequency === "monthly" ? 12 : 1);
+  const annualBase = amount * 12;
   const yearsFromStart = age - inputs.currentAge;
   return annualBase * Math.pow(1 + percentToRate(inputs.annualContributionIncreaseRate), yearsFromStart);
 }

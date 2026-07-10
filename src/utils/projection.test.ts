@@ -27,6 +27,23 @@ describe("projectRetirement", () => {
     expect(projection.rows.find((row) => row.age === 62)?.investmentContribution).toBe(0);
   });
 
+  it("treats regular savings and investments as monthly amounts by default", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 60,
+      retirementAge: 62,
+      endAge: 62,
+      cashSavingsContribution: 400,
+      investmentContribution: 600,
+      contributionFrequency: "yearly",
+      annualContributionIncreaseRate: 0
+    });
+
+    const firstYear = projection.rows.find((row) => row.age === 60);
+    expect(firstYear?.cashContribution).toBe(4_800);
+    expect(firstYear?.investmentContribution).toBe(7_200);
+  });
+
   it("marks a projection as not ready when retirement spending creates a shortfall", () => {
     const projection = projectRetirement({
       ...defaultInputs,

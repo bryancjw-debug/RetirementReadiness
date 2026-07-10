@@ -68,6 +68,14 @@ function numberValue(value: number) {
   return Number.isFinite(value) ? String(value) : "";
 }
 
+function annualToMonthly(value: number) {
+  return Number.isFinite(value) ? value / 12 : 0;
+}
+
+function monthlyToAnnual(value: number) {
+  return Number.isFinite(value) ? value * 12 : 0;
+}
+
 function MetricCard({
   label,
   value,
@@ -414,31 +422,22 @@ export default function App() {
                 onChange={(value) => updateInput("currentInvestments", value)}
               />
               <NumberField
-                label="Regular Cash Savings"
-                helper="Amount added to cash savings."
+                label="Monthly Cash Savings"
+                helper="Monthly amount added to cash savings."
                 prefix="$"
                 value={inputs.cashSavingsContribution}
                 onChange={(value) => updateInput("cashSavingsContribution", value)}
               />
               <NumberField
-                label="Regular Investment Amount"
-                helper="Amount invested into the retirement portfolio."
+                label="Monthly Investment Amount"
+                helper="Monthly amount invested into the retirement portfolio."
                 prefix="$"
                 value={inputs.investmentContribution}
                 onChange={(value) => updateInput("investmentContribution", value)}
               />
-              <label className="field">
-                <span>Contribution Frequency</span>
-                <select
-                  value={inputs.contributionFrequency}
-                  onChange={(event) => updateInput("contributionFrequency", event.target.value as RetirementInputs["contributionFrequency"])}
-                >
-                  <option value="monthly">Monthly</option>
-                  <option value="yearly">Yearly</option>
-                </select>
-              </label>
               <NumberField
-                label="Annual Contribution Increase"
+                label="Annual Increase For Monthly Savings"
+                helper="Applies to both monthly cash savings and monthly investment amount."
                 suffix="%"
                 step={0.1}
                 value={inputs.annualContributionIncreaseRate}
@@ -567,11 +566,11 @@ export default function App() {
             />
             <div className="field-grid">
               <NumberField
-                label="Retirement Spending"
-                helper="Annual amount in today's dollars."
+                label="Monthly Retirement Spending"
+                helper="Monthly amount in today's dollars. The projection annualises and inflates it."
                 prefix="$"
-                value={inputs.retirementSpendingAnnual}
-                onChange={(value) => updateInput("retirementSpendingAnnual", value)}
+                value={annualToMonthly(inputs.retirementSpendingAnnual)}
+                onChange={(value) => updateInput("retirementSpendingAnnual", monthlyToAnnual(value))}
               />
               <NumberField
                 label="Spending Inflation"
@@ -596,10 +595,11 @@ export default function App() {
               />
               {inputs.retirementIncomeMethod === "fixed" ? (
                 <NumberField
-                  label="Fixed Annual Drawdown"
+                  label="Fixed Monthly Drawdown"
+                  helper="Monthly amount in today's dollars. The projection annualises and inflates it."
                   prefix="$"
-                  value={inputs.fixedWithdrawalAnnual}
-                  onChange={(value) => updateInput("fixedWithdrawalAnnual", value)}
+                  value={annualToMonthly(inputs.fixedWithdrawalAnnual)}
+                  onChange={(value) => updateInput("fixedWithdrawalAnnual", monthlyToAnnual(value))}
                 />
               ) : null}
               {inputs.retirementIncomeMethod === "dynamic" ? (
@@ -868,7 +868,7 @@ export default function App() {
         ) : null}
         {guidedStep === 4 ? (
           <div className="guided-fields">
-            <NumberField label="Expected Yearly Spending In Retirement" helper="Use today's dollars. Example: $48,000 means about $4,000/month today." prefix="$" value={inputs.retirementSpendingAnnual} onChange={(value) => updateInput("retirementSpendingAnnual", value)} />
+            <NumberField label="Expected Monthly Spending In Retirement" helper="Use today's dollars. The projection annualises and inflates this amount." prefix="$" value={annualToMonthly(inputs.retirementSpendingAnnual)} onChange={(value) => updateInput("retirementSpendingAnnual", monthlyToAnnual(value))} />
             <NumberField label="Spending Inflation" suffix="%" step={0.1} value={inputs.retirementSpendingInflationRate} onChange={(value) => updateInput("retirementSpendingInflationRate", value)} />
             <NumberField label="Investment Growth During Retirement" suffix="%" step={0.1} value={inputs.retirementReturnRate} onChange={(value) => updateInput("retirementReturnRate", value)} />
             <NumberField label="Passive Income Yield" helper="Dividends, coupons, rent, or portfolio income if applicable." suffix="%" step={0.1} value={inputs.passiveIncomeYieldRate} onChange={(value) => updateInput("passiveIncomeYieldRate", value)} />
