@@ -440,14 +440,30 @@ function startCpfLifeIfNeeded(inputs: RetirementInputs, cpf: CpfState, age: numb
   }
 }
 
+function routeRetirementAllocation(inputs: RetirementInputs, cpf: CpfState, age: number, amount: number) {
+  const value = clampNonNegative(amount);
+  if (!value) return { toRa: 0, toOa: 0, toSa: 0 };
+
+  if (age < 55) {
+    cpf.sa += value;
+    return { toRa: 0, toOa: 0, toSa: value };
+  }
+
+  const target = cpfTargetForChoice(inputs.cpfRetirementSum, projectionYear(inputs, age));
+  const toRa = Math.min(value, Math.max(0, target - cpf.ra));
+  const toOa = value - toRa;
+  cpf.ra += toRa;
+  cpf.oa += toOa;
+  return { toRa, toOa, toSa: 0 };
+}
+
 function applyMedisaveCap(inputs: RetirementInputs, cpf: CpfState, age: number) {
   const capYear = projectionYear(inputs, age >= 65 ? 65 : age);
   const cap = bhsForYear(capYear);
   if (cpf.ma <= cap) return 0;
   const overflow = cpf.ma - cap;
   cpf.ma = cap;
-  if (age >= 55) cpf.ra += overflow;
-  else cpf.sa += overflow;
+  routeRetirementAllocation(inputs, cpf, age, overflow);
   return overflow;
 }
 
@@ -474,9 +490,8 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     const activeIncome = activeIncomeAnnual(inputs, age);
     const cpfContribution = inputs.includeCpf ? cpfContributionForYear(inputs, age) : { oa: 0, sa: 0, ma: 0, ra: 0, total: 0, employee: 0, employer: 0 };
     cpf.oa += cpfContribution.oa;
-    cpf.sa += cpfContribution.sa;
     cpf.ma += cpfContribution.ma;
-    cpf.ra += cpfContribution.ra;
+    routeRetirementAllocation(inputs, cpf, age, cpfContribution.sa + cpfContribution.ra);
     const contributionMedisaveOverflow = inputs.includeCpf ? applyMedisaveCap(inputs, cpf, age) : 0;
 
     const selectedCpfRetirementSum = inputs.includeCpf

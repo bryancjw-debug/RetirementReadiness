@@ -228,6 +228,32 @@ describe("projectRetirement", () => {
     expect(retirementYear.shortfall).toBe(0);
   });
 
+  it("uses remaining CPF SA before OA when cash and investments are exhausted", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 50,
+      retirementAge: 51,
+      endAge: 51,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      includeCpf: true,
+      cpfOa: 80_000,
+      cpfSa: 40_000,
+      cpfMa: 20_000,
+      cpfRa: 0,
+      cpfLifeStartAge: 65,
+      retirementSpendingAnnual: 90_000,
+      passiveIncomeYieldRate: 0
+    });
+
+    const retirementYear = projection.rows.find((row) => row.age === 51)!;
+    expect(retirementYear.cpfSaDrawdown).toBeGreaterThan(40_000);
+    expect(retirementYear.cpfOaDrawdown).toBeCloseTo(retirementYear.spendingNeed - retirementYear.cpfSaDrawdown, 0);
+    expect(retirementYear.shortfall).toBe(0);
+  });
+
   it("does not use CPF MediSave as retirement drawdown funding", () => {
     const projection = projectRetirement({
       ...defaultInputs,
@@ -241,7 +267,7 @@ describe("projectRetirement", () => {
       includeCpf: true,
       cpfOa: 0,
       cpfSa: 0,
-      cpfMa: 200_000,
+      cpfMa: 70_000,
       cpfRa: 600_000,
       cpfLifeStartAge: 70,
       retirementSpendingAnnual: 100_000,
@@ -306,6 +332,31 @@ describe("projectRetirement", () => {
     expect(firstYear.cpfSaContribution).toBe(0);
     expect(firstYear.cpfMaContribution).toBeGreaterThan(0);
     expect(firstYear.cpfEmployerContribution).toBe(0);
+  });
+
+  it("caps self-employed MediSave and routes pre-55 overflow to SA", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 45,
+      retirementAge: 60,
+      endAge: 45,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      includeCpf: true,
+      cpfWorkStatus: "Self-employed",
+      grossMonthlyIncome: 20_000,
+      selfEmployedAnnualMedisaveOverride: 37_740,
+      cpfOa: 0,
+      cpfSa: 0,
+      cpfMa: 78_000
+    });
+
+    const firstYear = projection.rows[0];
+    expect(firstYear.cpfMa).toBeLessThanOrEqual(79_000);
+    expect(firstYear.medisaveOverflow).toBeGreaterThan(0);
+    expect(firstYear.cpfSa).toBeGreaterThan(firstYear.medisaveOverflow - 1);
   });
 
   it("continues income CPF contributions after age 65 when retirement is later", () => {
