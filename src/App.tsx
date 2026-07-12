@@ -15,9 +15,9 @@ import {
   YAxis
 } from "recharts";
 import { ArrowLeft, ArrowRight, BadgeCheck, CircleAlert, Landmark, ListChecks, PiggyBank, RotateCcw, ShieldCheck, SlidersHorizontal, TrendingUp } from "lucide-react";
-import { defaultInputs, projectRetirement } from "./utils/projection";
+import { cpfContributionForYear, defaultInputs, projectRetirement } from "./utils/projection";
 import { formatCurrency, formatNumber, formatPercent } from "./utils/formatters";
-import type { CpfLifePlan, RetirementIncomeMethod, RetirementInputs, RetirementSumChoice, RetirementYear } from "./types";
+import type { CpfLifePlan, CpfPrRateType, CpfPrYear, CpfResidencyStatus, CpfWorkStatus, RetirementIncomeMethod, RetirementInputs, RetirementSumChoice, RetirementYear } from "./types";
 
 const methods: Array<{
   id: RetirementIncomeMethod;
@@ -53,6 +53,10 @@ const guidedSteps = [
   {
     title: "What You Can Still Save",
     helper: "Tell us what you can set aside before retirement."
+  },
+  {
+    title: "Income For CPF",
+    helper: "If you are still working, we estimate how income adds to CPF before retirement."
   },
   {
     title: "CPF LIFE",
@@ -135,6 +139,34 @@ function NumberField({
         />
         {suffix ? <b>{suffix}</b> : null}
       </div>
+      {helper ? <small>{helper}</small> : null}
+    </label>
+  );
+}
+
+function SelectField<T extends string>({
+  label,
+  helper,
+  value,
+  options,
+  onChange
+}: {
+  label: string;
+  helper?: string;
+  value: T;
+  options: readonly T[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value as T)}>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
       {helper ? <small>{helper}</small> : null}
     </label>
   );
@@ -255,6 +287,15 @@ function YearTable({ rows }: { rows: RetirementYear[] }) {
             <th>Lump Sum</th>
             <th>Savings Interest</th>
             <th>Investment Growth</th>
+            <th>Active Income</th>
+            <th>Employee / Self CPF</th>
+            <th>Employer CPF</th>
+            <th>CPF Added</th>
+            <th>CPF OA Added</th>
+            <th>CPF SA Added</th>
+            <th>CPF MA Added</th>
+            <th>CPF RA Added</th>
+            <th>MediSave Overflow</th>
             <th>Passive Income</th>
             <th>CPF LIFE Income</th>
             <th>Spending Need</th>
@@ -287,6 +328,15 @@ function YearTable({ rows }: { rows: RetirementYear[] }) {
               <td>{formatCurrency(row.lumpSum)}</td>
               <td>{formatCurrency(row.savingsInterest)}</td>
               <td>{formatCurrency(row.investmentGrowth)}</td>
+              <td>{formatCurrency(row.activeIncomeAnnual)}</td>
+              <td>{formatCurrency(row.cpfEmployeeContribution)}</td>
+              <td>{formatCurrency(row.cpfEmployerContribution)}</td>
+              <td>{formatCurrency(row.cpfTotalContribution)}</td>
+              <td>{formatCurrency(row.cpfOaContribution)}</td>
+              <td>{formatCurrency(row.cpfSaContribution)}</td>
+              <td>{formatCurrency(row.cpfMaContribution)}</td>
+              <td>{formatCurrency(row.cpfRaContribution)}</td>
+              <td>{formatCurrency(row.medisaveOverflow)}</td>
               <td>{formatCurrency(row.passiveIncomeGenerated)}</td>
               <td>{formatCurrency(row.cpfLifeIncome)}</td>
               <td>{formatCurrency(row.spendingNeed)}</td>
@@ -369,6 +419,31 @@ function GuidedPreview({ projection, inputs }: { projection: ReturnType<typeof p
         </div>
       </div>
     </aside>
+  );
+}
+
+function CpfIncomePreview({ inputs }: { inputs: RetirementInputs }) {
+  const contribution = cpfContributionForYear(inputs, inputs.currentAge);
+  const annualIncome = inputs.grossMonthlyIncome * 12;
+  return (
+    <div className="cpf-preview cpf-preview--income">
+      <div>
+        <span>Annual Gross Income</span>
+        <strong>{formatCurrency(annualIncome)}</strong>
+      </div>
+      <div>
+        <span>Employee / Self CPF</span>
+        <strong>{formatCurrency(contribution.employee)}</strong>
+      </div>
+      <div>
+        <span>Employer CPF</span>
+        <strong>{formatCurrency(contribution.employer)}</strong>
+      </div>
+      <div>
+        <span>CPF Added This Year</span>
+        <strong>{formatCurrency(contribution.total)}</strong>
+      </div>
+    </div>
   );
 }
 
@@ -495,6 +570,62 @@ export default function App() {
             />
             {inputs.includeCpf ? (
               <>
+                <div className="field-grid field-grid--spaced">
+                  <SelectField<CpfWorkStatus>
+                    label="CPF Work Type"
+                    helper="Choose Not contributing if you are already retired or do not want income CPF projected."
+                    value={inputs.cpfWorkStatus}
+                    options={["Employed", "Self-employed", "Not contributing"]}
+                    onChange={(value) => updateInput("cpfWorkStatus", value)}
+                  />
+                  <NumberField
+                    label="Gross Monthly Income"
+                    helper="Used only for CPF contribution projection before retirement."
+                    prefix="$"
+                    value={inputs.grossMonthlyIncome}
+                    onChange={(value) => updateInput("grossMonthlyIncome", value)}
+                  />
+                  <NumberField
+                    label="Annual Income Growth"
+                    helper="Applies to the gross income above until retirement."
+                    suffix="%"
+                    step={0.1}
+                    value={inputs.incomeGrowthRate}
+                    onChange={(value) => updateInput("incomeGrowthRate", value)}
+                  />
+                  <SelectField<CpfResidencyStatus>
+                    label="CPF Residency"
+                    value={inputs.cpfResidency}
+                    options={["Singapore Citizen", "Permanent Resident"]}
+                    onChange={(value) => updateInput("cpfResidency", value)}
+                  />
+                  {inputs.cpfResidency === "Permanent Resident" ? (
+                    <>
+                      <SelectField<CpfPrYear>
+                        label="PR CPF Year"
+                        value={inputs.cpfPrYear}
+                        options={["First Year", "Second Year", "Third Year Or Later"]}
+                        onChange={(value) => updateInput("cpfPrYear", value)}
+                      />
+                      <SelectField<CpfPrRateType>
+                        label="PR Contribution Basis"
+                        value={inputs.cpfPrRateType}
+                        options={["Graduated Employer And Employee", "Full Employer And Graduated Employee", "Full Employer And Employee"]}
+                        onChange={(value) => updateInput("cpfPrRateType", value)}
+                      />
+                    </>
+                  ) : null}
+                  {inputs.cpfWorkStatus === "Self-employed" ? (
+                    <NumberField
+                      label="Annual MediSave Override"
+                      helper="Optional. Leave 0 to estimate from self-employed income."
+                      prefix="$"
+                      value={inputs.selfEmployedAnnualMedisaveOverride}
+                      onChange={(value) => updateInput("selfEmployedAnnualMedisaveOverride", value)}
+                    />
+                  ) : null}
+                </div>
+                <CpfIncomePreview inputs={inputs} />
                 <div className="cpf-preview">
                   <div>
                     <span>Selected Retirement Sum At 55</span>
@@ -750,6 +881,8 @@ export default function App() {
             <strong>{formatCurrency(projection.summary.totalSavingsInterest)}</strong>
             <span>Total Growth</span>
             <strong>{formatCurrency(projection.summary.totalGrowth)}</strong>
+            <span>Total CPF Contributions</span>
+            <strong>{formatCurrency(projection.summary.totalCpfContributions)}</strong>
             <span>Total Passive Income</span>
             <strong>{formatCurrency(projection.summary.totalPassiveIncome)}</strong>
             <span>Total CPF LIFE Income</span>
@@ -829,6 +962,60 @@ export default function App() {
         ) : null}
         {guidedStep === 3 ? (
           <div className="guided-fields">
+            <ToggleRow title="Include Income CPF Contributions" description="Turn this on if you are still working and want CPF additions projected before retirement." checked={inputs.includeCpf && inputs.cpfWorkStatus !== "Not contributing"} onChange={(checked) => {
+              updateInput("includeCpf", checked || inputs.includeCpf);
+              updateInput("cpfWorkStatus", checked ? "Employed" : "Not contributing");
+            }} />
+            {inputs.includeCpf && inputs.cpfWorkStatus !== "Not contributing" ? (
+              <>
+                <SelectField<CpfWorkStatus>
+                  label="Work Type"
+                  value={inputs.cpfWorkStatus}
+                  options={["Employed", "Self-employed", "Not contributing"]}
+                  onChange={(value) => updateInput("cpfWorkStatus", value)}
+                />
+                <NumberField label="Gross Monthly Income" prefix="$" value={inputs.grossMonthlyIncome} onChange={(value) => updateInput("grossMonthlyIncome", value)} />
+                <NumberField label="Expected Income Growth" suffix="%" step={0.1} value={inputs.incomeGrowthRate} onChange={(value) => updateInput("incomeGrowthRate", value)} />
+                <SelectField<CpfResidencyStatus>
+                  label="CPF Residency"
+                  value={inputs.cpfResidency}
+                  options={["Singapore Citizen", "Permanent Resident"]}
+                  onChange={(value) => updateInput("cpfResidency", value)}
+                />
+                {inputs.cpfResidency === "Permanent Resident" ? (
+                  <div className="guided-subgrid">
+                    <SelectField<CpfPrYear>
+                      label="PR CPF Year"
+                      value={inputs.cpfPrYear}
+                      options={["First Year", "Second Year", "Third Year Or Later"]}
+                      onChange={(value) => updateInput("cpfPrYear", value)}
+                    />
+                    <SelectField<CpfPrRateType>
+                      label="PR Contribution Basis"
+                      value={inputs.cpfPrRateType}
+                      options={["Graduated Employer And Employee", "Full Employer And Graduated Employee", "Full Employer And Employee"]}
+                      onChange={(value) => updateInput("cpfPrRateType", value)}
+                    />
+                  </div>
+                ) : null}
+                {inputs.cpfWorkStatus === "Self-employed" ? (
+                  <NumberField
+                    label="Annual MediSave Override"
+                    helper="Optional. Leave 0 to estimate from self-employed income."
+                    prefix="$"
+                    value={inputs.selfEmployedAnnualMedisaveOverride}
+                    onChange={(value) => updateInput("selfEmployedAnnualMedisaveOverride", value)}
+                  />
+                ) : null}
+                <CpfIncomePreview inputs={inputs} />
+              </>
+            ) : (
+              <p className="math-note">No active-income CPF contribution will be added. Your existing CPF balances and CPF LIFE settings can still be projected in the next step.</p>
+            )}
+          </div>
+        ) : null}
+        {guidedStep === 4 ? (
+          <div className="guided-fields">
             <ToggleRow title="Include CPF LIFE" description="CPF LIFE can provide monthly income from your payout start age." checked={inputs.includeCpf} onChange={(checked) => updateInput("includeCpf", checked)} />
             {inputs.includeCpf ? (
               <>
@@ -866,7 +1053,7 @@ export default function App() {
             ) : null}
           </div>
         ) : null}
-        {guidedStep === 4 ? (
+        {guidedStep === 5 ? (
           <div className="guided-fields">
             <NumberField label="Expected Monthly Spending In Retirement" helper="Use today's dollars. The projection annualises and inflates this amount." prefix="$" value={annualToMonthly(inputs.retirementSpendingAnnual)} onChange={(value) => updateInput("retirementSpendingAnnual", monthlyToAnnual(value))} />
             <NumberField label="Spending Inflation" suffix="%" step={0.1} value={inputs.retirementSpendingInflationRate} onChange={(value) => updateInput("retirementSpendingInflationRate", value)} />

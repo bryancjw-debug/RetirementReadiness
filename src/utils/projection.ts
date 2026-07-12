@@ -1,5 +1,9 @@
 import type {
   CpfLifePlan,
+  CpfPrRateType,
+  CpfPrYear,
+  CpfResidencyStatus,
+  CpfWorkStatus,
   RetirementInputs,
   RetirementProjection,
   RetirementSumChoice,
@@ -8,6 +12,7 @@ import type {
 } from "../types";
 
 const CURRENT_POLICY_YEAR = 2026;
+const CPF_ANNUAL_CAP_2026 = 37_740;
 
 const clampNonNegative = (value: number) => Math.max(0, Number.isFinite(value) ? value : 0);
 
@@ -31,6 +36,13 @@ export const defaultInputs: RetirementInputs = {
   lumpSumAmount: 0,
   lumpSumAge: 65,
   includeCpf: false,
+  cpfWorkStatus: "Not contributing",
+  cpfResidency: "Singapore Citizen",
+  cpfPrYear: "Third Year Or Later",
+  cpfPrRateType: "Full Employer And Employee",
+  grossMonthlyIncome: 0,
+  incomeGrowthRate: 0,
+  selfEmployedAnnualMedisaveOverride: 0,
   cpfOa: 0,
   cpfSa: 0,
   cpfMa: 0,
@@ -58,6 +70,25 @@ export function retirementSumsForYear(year: number) {
   return { brs: Math.round(frs / 2 / 100) * 100, frs, ers: frs * 2 };
 }
 
+export function bhsForYear(year: number) {
+  const known: Record<number, number> = {
+    2016: 49_800,
+    2017: 52_000,
+    2018: 54_500,
+    2019: 57_200,
+    2020: 60_000,
+    2021: 63_000,
+    2022: 66_000,
+    2023: 68_500,
+    2024: 71_500,
+    2025: 75_500,
+    2026: 79_000
+  };
+  if (known[year]) return known[year];
+  if (year < 2016) return 49_800;
+  return Math.round((79_000 * 1.046 ** (year - 2026)) / 100) * 100;
+}
+
 function projectionYear(inputs: RetirementInputs, age: number) {
   return CURRENT_POLICY_YEAR + Math.max(0, age - inputs.currentAge);
 }
@@ -67,6 +98,150 @@ function cpfTargetForChoice(choice: RetirementSumChoice, year: number) {
   if (choice === "Basic") return sums.brs;
   if (choice === "Enhanced") return sums.ers;
   return sums.frs;
+}
+
+type CpfContributionRate = { total: number; employee: number };
+type CpfAllocation = { oa: number; sa: number; ma: number };
+type CpfContribution = {
+  oa: number;
+  sa: number;
+  ma: number;
+  ra: number;
+  total: number;
+  employee: number;
+  employer: number;
+};
+
+function cpfAgeBand(age: number) {
+  if (age <= 55) return "55";
+  if (age <= 60) return "60";
+  if (age <= 65) return "65";
+  if (age <= 70) return "70";
+  return "over70";
+}
+
+export function cpfAllocationRates(age: number, year = CURRENT_POLICY_YEAR): CpfAllocation {
+  if (age <= 35) return { oa: 0.6217, sa: 0.1621, ma: 0.2162 };
+  if (age <= 45) return { oa: 0.5677, sa: 0.1891, ma: 0.2432 };
+  if (age <= 50) return { oa: 0.5136, sa: 0.2162, ma: 0.2702 };
+  if (age <= 55) return { oa: 0.4055, sa: 0.3108, ma: 0.2837 };
+  if (year >= 2027 && age <= 60) return { oa: 0.3382, sa: 0.3661, ma: 0.2957 };
+  if (year >= 2027 && age <= 65) return { oa: 0.1347, sa: 0.4615, ma: 0.4038 };
+  if (age <= 60) return { oa: 0.353, sa: 0.3382, ma: 0.3088 };
+  if (age <= 65) return { oa: 0.14, sa: 0.44, ma: 0.42 };
+  if (age <= 70) return { oa: 0.0607, sa: 0.303, ma: 0.6363 };
+  return { oa: 0.08, sa: 0.08, ma: 0.84 };
+}
+
+function cpfContributionRates(
+  residency: CpfResidencyStatus,
+  prYear: CpfPrYear,
+  prRateType: CpfPrRateType,
+  age: number,
+  year = CURRENT_POLICY_YEAR
+): CpfContributionRate {
+  const band = cpfAgeBand(age);
+  const full: Record<string, CpfContributionRate> = year >= 2027
+    ? {
+        "55": { total: 0.37, employee: 0.2 },
+        "60": { total: 0.355, employee: 0.19 },
+        "65": { total: 0.26, employee: 0.13 },
+        "70": { total: 0.165, employee: 0.075 },
+        over70: { total: 0.125, employee: 0.05 }
+      }
+    : {
+        "55": { total: 0.37, employee: 0.2 },
+        "60": { total: 0.34, employee: 0.18 },
+        "65": { total: 0.25, employee: 0.125 },
+        "70": { total: 0.165, employee: 0.075 },
+        over70: { total: 0.125, employee: 0.05 }
+      };
+
+  if (residency !== "Permanent Resident" || prYear === "Third Year Or Later" || prRateType === "Full Employer And Employee") {
+    return full[band];
+  }
+
+  if (prRateType === "Graduated Employer And Employee") {
+    if (prYear === "First Year") {
+      if (band === "55" || band === "60") return { total: 0.09, employee: 0.05 };
+      return { total: 0.085, employee: 0.05 };
+    }
+    if (band === "55") return { total: 0.24, employee: 0.15 };
+    if (band === "60") return { total: 0.185, employee: 0.125 };
+    if (band === "65") return { total: 0.11, employee: 0.075 };
+    return { total: 0.085, employee: 0.05 };
+  }
+
+  if (prYear === "First Year") {
+    if (band === "55") return { total: 0.22, employee: 0.05 };
+    if (band === "60") return { total: year >= 2027 ? 0.215 : 0.21, employee: 0.05 };
+    if (band === "65") return { total: year >= 2027 ? 0.18 : 0.175, employee: 0.05 };
+    if (band === "70") return { total: 0.14, employee: 0.05 };
+    return { total: 0.125, employee: 0.05 };
+  }
+
+  if (band === "55") return { total: 0.32, employee: 0.15 };
+  if (band === "60") return { total: year >= 2027 ? 0.29 : 0.285, employee: 0.125 };
+  if (band === "65") return { total: year >= 2027 ? 0.205 : 0.2, employee: 0.075 };
+  if (band === "70") return { total: 0.14, employee: 0.05 };
+  return { total: 0.125, employee: 0.05 };
+}
+
+function monthlyCpfAmount(monthlyWage: number, rate: CpfContributionRate) {
+  if (monthlyWage <= 50) return { total: 0, employee: 0 };
+  const employerRate = Math.max(0, rate.total - rate.employee);
+  if (monthlyWage <= 500) return { total: monthlyWage * employerRate, employee: 0 };
+  if (monthlyWage <= 750) {
+    const employee = rate.employee * 3 * (monthlyWage - 500);
+    return { total: monthlyWage * employerRate + employee, employee };
+  }
+  return { total: monthlyWage * rate.total, employee: monthlyWage * rate.employee };
+}
+
+function selfEmployedMedisaveRate(age: number, annualIncome: number) {
+  if (annualIncome <= 6_000) return 0;
+  const maxRate = age < 35 ? 0.08 : age < 45 ? 0.09 : age < 50 ? 0.10 : 0.105;
+  const lowRate = maxRate / 2;
+  if (annualIncome <= 12_000) return lowRate;
+  if (annualIncome <= 18_000) {
+    const t = (annualIncome - 12_000) / 6_000;
+    return lowRate + (maxRate - lowRate) * t;
+  }
+  return maxRate;
+}
+
+export function activeIncomeAnnual(inputs: RetirementInputs, age: number) {
+  if (!inputs.includeCpf || inputs.cpfWorkStatus === "Not contributing" || age >= inputs.retirementAge) return 0;
+  const yearsFromStart = Math.max(0, age - inputs.currentAge);
+  return clampNonNegative(inputs.grossMonthlyIncome) * 12 * Math.pow(1 + percentToRate(inputs.incomeGrowthRate), yearsFromStart);
+}
+
+export function cpfContributionForYear(inputs: RetirementInputs, age: number): CpfContribution {
+  const annualIncome = activeIncomeAnnual(inputs, age);
+  if (!annualIncome) return { oa: 0, sa: 0, ma: 0, ra: 0, total: 0, employee: 0, employer: 0 };
+
+  if (inputs.cpfWorkStatus === "Self-employed") {
+    const estimated = annualIncome * selfEmployedMedisaveRate(age, annualIncome);
+    const ma = Math.min(
+      clampNonNegative(inputs.selfEmployedAnnualMedisaveOverride) || estimated,
+      CPF_ANNUAL_CAP_2026
+    );
+    return { oa: 0, sa: 0, ma, ra: 0, total: ma, employee: ma, employer: 0 };
+  }
+
+  const year = projectionYear(inputs, age);
+  const rate = cpfContributionRates(inputs.cpfResidency, inputs.cpfPrYear, inputs.cpfPrRateType, age, year);
+  const allocation = cpfAllocationRates(age, year);
+  const cpfWage = Math.min(8000, Math.max(0, annualIncome / 12)) * 12;
+  const monthly = monthlyCpfAmount(cpfWage / 12, rate);
+  const total = Math.min(monthly.total * 12, CPF_ANNUAL_CAP_2026);
+  const employee = Math.min(monthly.employee * 12, total);
+  const ma = total * allocation.ma;
+  const retirementAllocation = total * allocation.sa;
+  const oa = Math.max(0, total - ma - retirementAllocation);
+  return age >= 55
+    ? { oa, sa: 0, ma, ra: retirementAllocation, total, employee, employer: Math.max(0, total - employee) }
+    : { oa, sa: retirementAllocation, ma, ra: 0, total, employee, employer: Math.max(0, total - employee) };
 }
 
 function cpfLifeMonthlyFromRaBase(ra: number) {
@@ -175,6 +350,13 @@ export function sanitizeInputs(inputs: RetirementInputs): RetirementInputs {
     retirementReturnRate: Number.isFinite(inputs.retirementReturnRate) ? inputs.retirementReturnRate : 0,
     passiveIncomeYieldRate: Number.isFinite(inputs.passiveIncomeYieldRate) ? inputs.passiveIncomeYieldRate : 0,
     lumpSumAmount: clampNonNegative(inputs.lumpSumAmount),
+    cpfWorkStatus: inputs.cpfWorkStatus ?? "Not contributing",
+    cpfResidency: inputs.cpfResidency ?? "Singapore Citizen",
+    cpfPrYear: inputs.cpfPrYear ?? "Third Year Or Later",
+    cpfPrRateType: inputs.cpfPrRateType ?? "Full Employer And Employee",
+    grossMonthlyIncome: clampNonNegative(inputs.grossMonthlyIncome),
+    incomeGrowthRate: Number.isFinite(inputs.incomeGrowthRate) ? inputs.incomeGrowthRate : 0,
+    selfEmployedAnnualMedisaveOverride: clampNonNegative(inputs.selfEmployedAnnualMedisaveOverride),
     cpfOa: clampNonNegative(inputs.cpfOa),
     cpfSa: clampNonNegative(inputs.cpfSa),
     cpfMa: clampNonNegative(inputs.cpfMa),
@@ -258,6 +440,17 @@ function startCpfLifeIfNeeded(inputs: RetirementInputs, cpf: CpfState, age: numb
   }
 }
 
+function applyMedisaveCap(inputs: RetirementInputs, cpf: CpfState, age: number) {
+  const capYear = projectionYear(inputs, age >= 65 ? 65 : age);
+  const cap = bhsForYear(capYear);
+  if (cpf.ma <= cap) return 0;
+  const overflow = cpf.ma - cap;
+  cpf.ma = cap;
+  if (age >= 55) cpf.ra += overflow;
+  else cpf.sa += overflow;
+  return overflow;
+}
+
 export function projectRetirement(rawInputs: RetirementInputs): RetirementProjection {
   const inputs = sanitizeInputs(rawInputs);
   const rows: RetirementYear[] = [];
@@ -278,6 +471,13 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     const phase: RetirementYear["phase"] = age < inputs.retirementAge ? "build-up" : "retirement";
     formRaIfNeeded(inputs, cpf, age);
     startCpfLifeIfNeeded(inputs, cpf, age);
+    const activeIncome = activeIncomeAnnual(inputs, age);
+    const cpfContribution = inputs.includeCpf ? cpfContributionForYear(inputs, age) : { oa: 0, sa: 0, ma: 0, ra: 0, total: 0, employee: 0, employer: 0 };
+    cpf.oa += cpfContribution.oa;
+    cpf.sa += cpfContribution.sa;
+    cpf.ma += cpfContribution.ma;
+    cpf.ra += cpfContribution.ra;
+    const contributionMedisaveOverflow = inputs.includeCpf ? applyMedisaveCap(inputs, cpf, age) : 0;
 
     const selectedCpfRetirementSum = inputs.includeCpf
       ? cpfTargetForChoice(inputs.cpfRetirementSum, projectionYear(inputs, Math.max(age, 55)))
@@ -346,6 +546,7 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       cpf.sa += interest.sa;
       cpf.ma += interest.ma;
       cpf.ra += interest.ra;
+      applyMedisaveCap(inputs, cpf, age);
       if (inputs.cpfLifePlan === "Basic") cpf.lifeReserve = cpf.ra;
     }
 
@@ -364,6 +565,15 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       lumpSum,
       savingsInterest,
       investmentGrowth,
+      activeIncomeAnnual: activeIncome,
+      cpfEmployeeContribution: cpfContribution.employee,
+      cpfEmployerContribution: cpfContribution.employer,
+      cpfTotalContribution: cpfContribution.total,
+      cpfOaContribution: cpfContribution.oa,
+      cpfSaContribution: cpfContribution.sa,
+      cpfMaContribution: cpfContribution.ma,
+      cpfRaContribution: cpfContribution.ra,
+      medisaveOverflow: contributionMedisaveOverflow,
       passiveIncomeGenerated,
       cpfLifeIncome,
       spendingNeed,
@@ -397,6 +607,7 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
   const totalContributed = rows.reduce((sum, row) => sum + row.cashContribution + row.investmentContribution + row.lumpSum, 0);
   const totalSavingsInterest = rows.reduce((sum, row) => sum + row.savingsInterest, 0);
   const totalGrowth = rows.reduce((sum, row) => sum + row.investmentGrowth, 0);
+  const totalCpfContributions = rows.reduce((sum, row) => sum + row.cpfTotalContribution, 0);
   const totalWithdrawn = rows.reduce((sum, row) => sum + row.withdrawal, 0);
   const totalCpfDrawdown = rows.reduce((sum, row) => sum + row.cpfDrawdown, 0);
   const totalPassiveIncome = rows.reduce((sum, row) => sum + row.passiveIncomeGenerated, 0);
@@ -422,6 +633,7 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     totalContributed,
     totalSavingsInterest,
     totalGrowth,
+    totalCpfContributions,
     totalWithdrawn,
     totalCpfDrawdown,
     totalPassiveIncome,

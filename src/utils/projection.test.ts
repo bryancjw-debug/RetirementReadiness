@@ -250,7 +250,86 @@ describe("projectRetirement", () => {
 
     const retirementYear = projection.rows.find((row) => row.age === 65)!;
     expect(retirementYear.cpfDrawdown).toBe(0);
-    expect(retirementYear.cpfMa).toBeGreaterThan(200_000);
+    expect(retirementYear.cpfMa).toBeLessThan(100_000);
     expect(retirementYear.shortfall).toBeGreaterThan(0);
+  });
+
+  it("adds employed CPF contributions from gross income before retirement", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 35,
+      retirementAge: 37,
+      endAge: 37,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      includeCpf: true,
+      cpfWorkStatus: "Employed",
+      cpfResidency: "Singapore Citizen",
+      grossMonthlyIncome: 8_000,
+      incomeGrowthRate: 0,
+      cpfOa: 0,
+      cpfSa: 0,
+      cpfMa: 0
+    });
+
+    const firstYear = projection.rows.find((row) => row.age === 35)!;
+    expect(firstYear.activeIncomeAnnual).toBe(96_000);
+    expect(firstYear.cpfEmployeeContribution).toBeCloseTo(19_200, 0);
+    expect(firstYear.cpfEmployerContribution).toBeCloseTo(16_320, 0);
+    expect(firstYear.cpfTotalContribution).toBeCloseTo(35_520, 0);
+    expect(firstYear.cpfOa).toBeGreaterThan(0);
+    expect(firstYear.cpfMa).toBeGreaterThan(0);
+  });
+
+  it("adds self-employed CPF as MediSave-only contributions", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 45,
+      retirementAge: 47,
+      endAge: 47,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      includeCpf: true,
+      cpfWorkStatus: "Self-employed",
+      grossMonthlyIncome: 6_000,
+      cpfOa: 0,
+      cpfSa: 0,
+      cpfMa: 0
+    });
+
+    const firstYear = projection.rows.find((row) => row.age === 45)!;
+    expect(firstYear.cpfOaContribution).toBe(0);
+    expect(firstYear.cpfSaContribution).toBe(0);
+    expect(firstYear.cpfMaContribution).toBeGreaterThan(0);
+    expect(firstYear.cpfEmployerContribution).toBe(0);
+  });
+
+  it("continues income CPF contributions after age 65 when retirement is later", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 64,
+      retirementAge: 68,
+      endAge: 68,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      includeCpf: true,
+      cpfWorkStatus: "Employed",
+      grossMonthlyIncome: 5_000,
+      cpfOa: 20_000,
+      cpfSa: 20_000,
+      cpfMa: 20_000,
+      cpfLifeStartAge: 70
+    });
+
+    const age66 = projection.rows.find((row) => row.age === 66)!;
+    expect(age66.cpfTotalContribution).toBeGreaterThan(0);
+    expect(age66.cpfOaContribution).toBeGreaterThan(0);
+    expect(age66.cpfMaContribution).toBeGreaterThan(0);
   });
 });

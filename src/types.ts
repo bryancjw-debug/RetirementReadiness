@@ -6,6 +6,14 @@ export type RetirementSumChoice = "Basic" | "Full" | "Enhanced";
 
 export type CpfLifePlan = "Standard" | "Basic" | "Escalating";
 
+export type CpfWorkStatus = "Employed" | "Self-employed" | "Not contributing";
+
+export type CpfResidencyStatus = "Singapore Citizen" | "Permanent Resident";
+
+export type CpfPrYear = "First Year" | "Second Year" | "Third Year Or Later";
+
+export type CpfPrRateType = "Graduated Employer And Employee" | "Full Employer And Graduated Employee" | "Full Employer And Employee";
+
 export interface RetirementInputs {
   currentAge: number;
   retirementAge: number;
@@ -24,6 +32,13 @@ export interface RetirementInputs {
   lumpSumAmount: number;
   lumpSumAge: number;
   includeCpf: boolean;
+  cpfWorkStatus: CpfWorkStatus;
+  cpfResidency: CpfResidencyStatus;
+  cpfPrYear: CpfPrYear;
+  cpfPrRateType: CpfPrRateType;
+  grossMonthlyIncome: number;
+  incomeGrowthRate: number;
+  selfEmployedAnnualMedisaveOverride: number;
   cpfOa: number;
   cpfSa: number;
   cpfMa: number;
@@ -51,6 +66,15 @@ export interface RetirementYear {
   lumpSum: number;
   savingsInterest: number;
   investmentGrowth: number;
+  activeIncomeAnnual: number;
+  cpfEmployeeContribution: number;
+  cpfEmployerContribution: number;
+  cpfTotalContribution: number;
+  cpfOaContribution: number;
+  cpfSaContribution: number;
+  cpfMaContribution: number;
+  cpfRaContribution: number;
+  medisaveOverflow: number;
   passiveIncomeGenerated: number;
   cpfLifeIncome: number;
   spendingNeed: number;
@@ -85,6 +109,7 @@ export interface RetirementSummary {
   totalContributed: number;
   totalSavingsInterest: number;
   totalGrowth: number;
+  totalCpfContributions: number;
   totalWithdrawn: number;
   totalCpfDrawdown: number;
   totalPassiveIncome: number;
