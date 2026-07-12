@@ -47,19 +47,15 @@ const guidedSteps = [
     helper: "Start with the ages. These set the timeline for the whole retirement check."
   },
   {
+    title: "Cashflow Analysis",
+    helper: "Enter what you can save monthly and, if you are still working, estimate CPF contributions from income."
+  },
+  {
     title: "What You Have Today",
     helper: "Enter your cash, investments, and CPF balances. Estimates are okay for a first pass."
   },
   {
-    title: "What You Can Still Save",
-    helper: "Tell us what you can set aside before retirement."
-  },
-  {
-    title: "Income For CPF",
-    helper: "If you are still working, we estimate how income adds to CPF before retirement."
-  },
-  {
-    title: "CPF LIFE",
+    title: "CPF LIFE Planning",
     helper: "CPF LIFE can be estimated, or you can enter the official CPF estimator payout."
   },
   {
@@ -938,30 +934,18 @@ export default function App() {
         ) : null}
         {guidedStep === 1 ? (
           <div className="guided-fields">
-            <NumberField label="Cash Savings Today" helper="Bank savings or cash you can use." prefix="$" value={inputs.currentCashSavings} onChange={(value) => updateInput("currentCashSavings", value)} />
-            <NumberField label="Investments Today" helper="Stocks, funds, ETFs, bonds, or portfolios." prefix="$" value={inputs.currentInvestments} onChange={(value) => updateInput("currentInvestments", value)} />
-            <ToggleRow title="Include CPF Balances" description="Recommended for Singapore retirement planning." checked={inputs.includeCpf} onChange={(checked) => updateInput("includeCpf", checked)} />
-            {inputs.includeCpf ? (
+            <section className="guided-section">
+              <h3>What You Can Save Monthly</h3>
               <div className="guided-subgrid">
-                <NumberField label="CPF OA" prefix="$" value={inputs.cpfOa} onChange={(value) => updateInput("cpfOa", value)} />
-                <NumberField label="CPF SA" prefix="$" value={inputs.cpfSa} onChange={(value) => updateInput("cpfSa", value)} />
-                <NumberField label="CPF MA" prefix="$" value={inputs.cpfMa} onChange={(value) => updateInput("cpfMa", value)} />
-                <NumberField label="CPF RA" helper="Leave 0 if not formed yet." prefix="$" value={inputs.cpfRa} onChange={(value) => updateInput("cpfRa", value)} />
+                <NumberField label="Monthly Cash Savings" prefix="$" value={inputs.cashSavingsContribution} onChange={(value) => updateInput("cashSavingsContribution", value)} />
+                <NumberField label="Monthly Investment Amount" prefix="$" value={inputs.investmentContribution} onChange={(value) => updateInput("investmentContribution", value)} />
+                <NumberField label="Yearly Increase In Savings" suffix="%" step={0.1} value={inputs.annualContributionIncreaseRate} onChange={(value) => updateInput("annualContributionIncreaseRate", value)} />
+                <NumberField label="Cash Interest" helper="For cash savings only." suffix="%" step={0.1} value={inputs.cashInterestRate} onChange={(value) => updateInput("cashInterestRate", value)} />
+                <NumberField label="Investment Return Before Retirement" helper="For invested assets only." suffix="%" step={0.1} value={inputs.preRetirementInvestmentReturnRate} onChange={(value) => updateInput("preRetirementInvestmentReturnRate", value)} />
               </div>
-            ) : null}
-          </div>
-        ) : null}
-        {guidedStep === 2 ? (
-          <div className="guided-fields">
-            <NumberField label="Monthly Cash Savings" prefix="$" value={inputs.cashSavingsContribution} onChange={(value) => updateInput("cashSavingsContribution", value)} />
-            <NumberField label="Monthly Investment Amount" prefix="$" value={inputs.investmentContribution} onChange={(value) => updateInput("investmentContribution", value)} />
-            <NumberField label="Yearly Increase In Savings" suffix="%" step={0.1} value={inputs.annualContributionIncreaseRate} onChange={(value) => updateInput("annualContributionIncreaseRate", value)} />
-            <NumberField label="Cash Interest" helper="For cash savings only." suffix="%" step={0.1} value={inputs.cashInterestRate} onChange={(value) => updateInput("cashInterestRate", value)} />
-            <NumberField label="Investment Return Before Retirement" helper="For invested assets only." suffix="%" step={0.1} value={inputs.preRetirementInvestmentReturnRate} onChange={(value) => updateInput("preRetirementInvestmentReturnRate", value)} />
-          </div>
-        ) : null}
-        {guidedStep === 3 ? (
-          <div className="guided-fields">
+            </section>
+            <section className="guided-section">
+              <h3>Projected CPF From Work</h3>
             <ToggleRow title="Include Income CPF Contributions" description="Turn this on if you are still working and want CPF additions projected before retirement." checked={inputs.includeCpf && inputs.cpfWorkStatus !== "Not contributing"} onChange={(checked) => {
               updateInput("includeCpf", checked || inputs.includeCpf);
               updateInput("cpfWorkStatus", checked ? "Employed" : "Not contributing");
@@ -1012,9 +996,25 @@ export default function App() {
             ) : (
               <p className="math-note">No active-income CPF contribution will be added. Your existing CPF balances and CPF LIFE settings can still be projected in the next step.</p>
             )}
+            </section>
           </div>
         ) : null}
-        {guidedStep === 4 ? (
+        {guidedStep === 2 ? (
+          <div className="guided-fields">
+            <NumberField label="Cash Savings Today" helper="Bank savings or cash you can use." prefix="$" value={inputs.currentCashSavings} onChange={(value) => updateInput("currentCashSavings", value)} />
+            <NumberField label="Investments Today" helper="Stocks, funds, ETFs, bonds, or portfolios." prefix="$" value={inputs.currentInvestments} onChange={(value) => updateInput("currentInvestments", value)} />
+            <ToggleRow title="Include CPF Balances" description="Recommended for Singapore retirement planning." checked={inputs.includeCpf} onChange={(checked) => updateInput("includeCpf", checked)} />
+            {inputs.includeCpf ? (
+              <div className="guided-subgrid">
+                <NumberField label="CPF OA" prefix="$" value={inputs.cpfOa} onChange={(value) => updateInput("cpfOa", value)} />
+                <NumberField label="CPF SA" prefix="$" value={inputs.cpfSa} onChange={(value) => updateInput("cpfSa", value)} />
+                <NumberField label="CPF MA" prefix="$" value={inputs.cpfMa} onChange={(value) => updateInput("cpfMa", value)} />
+                <NumberField label="CPF RA" helper="Leave 0 if not formed yet." prefix="$" value={inputs.cpfRa} onChange={(value) => updateInput("cpfRa", value)} />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        {guidedStep === 3 ? (
           <div className="guided-fields">
             <ToggleRow title="Include CPF LIFE" description="CPF LIFE can provide monthly income from your payout start age." checked={inputs.includeCpf} onChange={(checked) => updateInput("includeCpf", checked)} />
             {inputs.includeCpf ? (
@@ -1053,7 +1053,7 @@ export default function App() {
             ) : null}
           </div>
         ) : null}
-        {guidedStep === 5 ? (
+        {guidedStep === 4 ? (
           <div className="guided-fields">
             <NumberField label="Expected Monthly Spending In Retirement" helper="Use today's dollars. The projection annualises and inflates this amount." prefix="$" value={annualToMonthly(inputs.retirementSpendingAnnual)} onChange={(value) => updateInput("retirementSpendingAnnual", monthlyToAnnual(value))} />
             <NumberField label="Spending Inflation" suffix="%" step={0.1} value={inputs.retirementSpendingInflationRate} onChange={(value) => updateInput("retirementSpendingInflationRate", value)} />

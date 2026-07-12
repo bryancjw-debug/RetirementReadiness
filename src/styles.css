@@ -294,8 +294,26 @@ h2 {
 
 .guided-fields > .field,
 .guided-fields > .toggle-row,
+.guided-fields > .guided-section,
 .guided-subgrid {
   max-width: 860px;
+}
+
+.guided-section {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.guided-section h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(1.05rem, 1.5vw, 1.22rem);
+  letter-spacing: -0.02em;
 }
 
 .guided-subgrid {
@@ -674,6 +692,19 @@ h2 {
 
 .field select {
   padding: 0 12px;
+  color-scheme: dark;
+  background-color: #0b100d;
+}
+
+.field select option,
+.field select optgroup {
+  color: var(--text);
+  background-color: #0b100d;
+}
+
+.field select option:checked {
+  color: #10140f;
+  background-color: var(--gold);
 }
 
 .field input::-webkit-outer-spin-button,
@@ -890,10 +921,16 @@ tr.has-shortfall td {
 
   .guided-card {
     min-height: 0;
+    padding: 18px;
   }
 
   .guided-card h2 {
     font-size: clamp(2.15rem, 12vw, 3.4rem);
+  }
+
+  .guided-section {
+    padding: 14px;
+    border-radius: 18px;
   }
 
   .guided-subgrid {
