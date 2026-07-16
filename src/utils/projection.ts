@@ -270,8 +270,7 @@ function cpfLifeAnnual(
   inputs: RetirementInputs,
   base: number,
   startAge: number,
-  age: number,
-  raBalance = base
+  age: number
 ) {
   let monthly = inputs.cpfLifeMonthlyOverride > 0
     ? inputs.cpfLifeMonthlyOverride
@@ -279,7 +278,6 @@ function cpfLifeAnnual(
 
   if (inputs.cpfLifeMonthlyOverride <= 0 && inputs.cpfLifePlan === "Basic") {
     monthly *= 0.86;
-    if (raBalance < 60_000) monthly *= 0.9 + (0.1 * Math.max(0, raBalance)) / 60_000;
   }
 
   if (inputs.cpfLifePlan === "Escalating") {
@@ -466,6 +464,11 @@ function routeRetirementAllocation(inputs: RetirementInputs, cpf: CpfState, age:
   const value = clampNonNegative(amount);
   if (!value) return { toRa: 0, toOa: 0, toSa: 0 };
 
+  if (cpf.lifeStarted) {
+    cpf.oa += value;
+    return { toRa: 0, toOa: value, toSa: 0 };
+  }
+
   if (age < 55) {
     cpf.sa += value;
     return { toRa: 0, toOa: 0, toSa: value };
@@ -520,7 +523,7 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       ? cpfTargetForChoice(inputs.cpfRetirementSum, projectionYear(inputs, Math.max(age, 55)))
       : 0;
     const cpfLifeIncome = inputs.includeCpf && cpf.lifeStarted
-      ? cpfLifeAnnual(inputs, cpf.lifeBase, inputs.cpfLifeStartAge, age, cpf.ra)
+      ? cpfLifeAnnual(inputs, cpf.lifeBase, inputs.cpfLifeStartAge, age)
       : 0;
 
     const openingCashSavings = Math.max(cashBalance, 0);

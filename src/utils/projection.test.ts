@@ -202,6 +202,60 @@ describe("projectRetirement", () => {
     expect(projection.rows.find((row) => row.age === 66)?.cpfLifeIncome).toBeCloseTo(22_800, 0);
   });
 
+  it("keeps Basic CPF LIFE payout level even as the modeled RA reserve draws down", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 62,
+      retirementAge: 65,
+      endAge: 68,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      includeCpf: true,
+      cpfOa: 0,
+      cpfSa: 0,
+      cpfMa: 0,
+      cpfRa: 314_018,
+      cpfLifeStartAge: 65,
+      cpfRetirementSum: "Full",
+      cpfLifePlan: "Basic"
+    });
+
+    const age65 = projection.rows.find((row) => row.age === 65)!;
+    const age68 = projection.rows.find((row) => row.age === 68)!;
+    expect(age65.cpfLifeIncome).toBeGreaterThan(0);
+    expect(age68.cpfLifeIncome).toBeCloseTo(age65.cpfLifeIncome, 0);
+  });
+
+  it("does not refill CPF RA after CPF LIFE starts", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 64,
+      retirementAge: 65,
+      endAge: 66,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      includeCpf: true,
+      cpfOa: 0,
+      cpfSa: 0,
+      cpfMa: 200_000,
+      cpfRa: 314_018,
+      cpfLifeStartAge: 65,
+      cpfRetirementSum: "Full",
+      cpfLifePlan: "Standard",
+      retirementSpendingAnnual: 0
+    });
+
+    const age65 = projection.rows.find((row) => row.age === 65)!;
+    const age66 = projection.rows.find((row) => row.age === 66)!;
+    expect(age65.cpfRa).toBe(0);
+    expect(age66.cpfRa).toBe(0);
+    expect(age66.cpfLifeReserve).toBeGreaterThan(0);
+  });
+
   it("uses CPF OA drawdown before reporting a true retirement shortfall", () => {
     const projection = projectRetirement({
       ...defaultInputs,

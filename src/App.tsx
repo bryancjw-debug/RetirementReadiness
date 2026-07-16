@@ -188,6 +188,19 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
   );
 }
 
+function ChartLegend({ items }: { items: { label: string; className: string }[] }) {
+  return (
+    <div className="chart-legend">
+      {items.map((item) => (
+        <span key={item.label}>
+          <i className={item.className} aria-hidden="true" />
+          {item.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function YearTable({ rows }: { rows: RetirementYear[] }) {
   return (
     <div className="table-wrap">
@@ -202,7 +215,9 @@ function YearTable({ rows }: { rows: RetirementYear[] }) {
             <th>CPF SA</th>
             <th>CPF MA</th>
             <th>CPF RA</th>
+            <th>CPF LIFE Reserve</th>
             <th>CPF LIFE</th>
+            <th>Dividends</th>
             <th>Spending</th>
             <th>Drawdown</th>
             <th>Shortfall</th>
@@ -220,7 +235,9 @@ function YearTable({ rows }: { rows: RetirementYear[] }) {
               <td>{formatCurrency(row.cpfSa)}</td>
               <td>{formatCurrency(row.cpfMa)}</td>
               <td>{formatCurrency(row.cpfRa)}</td>
+              <td>{formatCurrency(row.cpfLifeReserve)}</td>
               <td>{formatCurrency(row.cpfLifeIncome)}</td>
+              <td>{formatCurrency(row.passiveIncomeGenerated)}</td>
               <td>{formatCurrency(row.spendingNeed)}</td>
               <td>{formatCurrency(row.withdrawal)}</td>
               <td>{formatCurrency(row.shortfall)}</td>
@@ -286,8 +303,11 @@ export default function App() {
     cash: Math.round(row.endingCashSavings),
     investments: Math.round(row.endingInvestments),
     cpf: Math.round(row.cpfTotal),
+    cpfLifeIncome: Math.round(row.cpfLifeIncome),
+    passiveIncome: Math.round(row.passiveIncomeGenerated),
     income: Math.round(row.passiveIncomeGenerated + row.cpfLifeIncome),
     spending: Math.round(row.spendingNeed),
+    drawdown: Math.round(row.withdrawal),
     shortfall: Math.round(row.shortfall)
   }));
 
@@ -534,15 +554,15 @@ export default function App() {
                   <AreaChart data={chartRows} margin={{ top: 12, right: 20, left: 4, bottom: 8 }}>
                     <defs>
                       <linearGradient id="wealthFill" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="#2f80ed" stopOpacity={0.55} />
-                        <stop offset="100%" stopColor="#2f80ed" stopOpacity={0.06} />
+                        <stop offset="0%" stopColor="var(--chart-primary)" stopOpacity={0.48} />
+                        <stop offset="100%" stopColor="var(--chart-primary)" stopOpacity={0.08} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid stroke="rgba(15, 45, 82, 0.12)" vertical={false} />
+                    <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
                     <XAxis dataKey="age" tickLine={false} axisLine={false} />
                     <YAxis tickFormatter={(value) => formatCurrency(Number(value), { compact: true })} tickLine={false} axisLine={false} />
                     <Tooltip content={<ChartTooltip />} />
-                    <Area dataKey="totalWealth" name="Total Retirement Wealth" type="monotone" stroke="#2f80ed" strokeWidth={3} fill="url(#wealthFill)" />
+                    <Area dataKey="totalWealth" name="Total Retirement Wealth" type="monotone" stroke="var(--chart-primary)" strokeWidth={3} fill="url(#wealthFill)" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -553,20 +573,29 @@ export default function App() {
             <div className="chart-card__header">
               <div>
                 <h3>Retirement Cash Flow</h3>
-                <p>Shows the gap between retirement spending and income from passive income plus CPF LIFE.</p>
+                <p>Separates CPF LIFE, dividends, spending, and the drawdown needed when income is not enough.</p>
               </div>
             </div>
+            <ChartLegend
+              items={[
+                { label: "CPF LIFE", className: "dot-primary" },
+                { label: "Dividends", className: "dot-success" },
+                { label: "Spending", className: "dot-error" },
+                { label: "Drawdown", className: "dot-warning" }
+              ]}
+            />
             <div className="chart-frame">
               <div className="chart-frame__inner">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartRows} margin={{ top: 12, right: 20, left: 4, bottom: 8 }}>
-                    <CartesianGrid stroke="rgba(15, 45, 82, 0.12)" vertical={false} />
+                    <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
                     <XAxis dataKey="age" tickLine={false} axisLine={false} />
                     <YAxis tickFormatter={(value) => formatCurrency(Number(value), { compact: true })} tickLine={false} axisLine={false} />
                     <Tooltip content={<ChartTooltip />} />
-                    <Line dataKey="income" name="Retirement Income" type="monotone" stroke="#2f80ed" strokeWidth={3} dot={false} />
-                    <Line dataKey="spending" name="Spending Need" type="monotone" stroke="#d65f5f" strokeWidth={3} dot={false} />
-                    <Line dataKey="shortfall" name="Shortfall" type="monotone" stroke="#c58a1e" strokeWidth={3} dot={false} />
+                    <Line dataKey="cpfLifeIncome" name="CPF LIFE Income" type="monotone" stroke="var(--chart-primary)" strokeWidth={3} dot={false} />
+                    <Line dataKey="passiveIncome" name="Dividends / Passive Income" type="monotone" stroke="var(--chart-success)" strokeWidth={3} dot={false} />
+                    <Line dataKey="spending" name="Spending Need" type="monotone" stroke="var(--chart-error)" strokeWidth={3} dot={false} />
+                    <Line dataKey="drawdown" name="Drawdown Used" type="monotone" stroke="var(--chart-warning)" strokeWidth={3} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -580,6 +609,7 @@ export default function App() {
             <div>
               <h3>How The Result Is Calculated</h3>
               <p>Spending begins at retirement age. CPF LIFE begins only from the CPF LIFE start age, so retiring before 65 naturally creates a bridge period funded by cash, investments, CPF SA, and CPF OA where available.</p>
+              <p>When CPF LIFE starts, the RA amount committed to CPF LIFE is shown as a CPF LIFE reserve for transparency. It is not double-counted as ordinary retirement wealth, and CPF LIFE payouts continue for life even if the modeled reserve runs down.</p>
             </div>
           </div>
           <div className="math-grid">
