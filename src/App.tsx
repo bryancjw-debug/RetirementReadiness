@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Area,
   AreaChart,
@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import { BadgeCheck, Calculator, CircleAlert, RotateCcw, ShieldCheck } from "lucide-react";
+import { BadgeCheck, Calculator, CircleAlert, Moon, RotateCcw, ShieldCheck, Sun } from "lucide-react";
 import { cpfContributionForYear, defaultInputs, projectRetirement } from "./utils/projection";
 import { formatCurrency, formatNumber, formatPercent } from "./utils/formatters";
 import type {
@@ -221,6 +221,15 @@ function ChartLegend({ items }: { items: { label: string; className: string }[] 
   );
 }
 
+type ThemePreference = "light" | "dark";
+
+function getInitialTheme(): ThemePreference {
+  if (typeof window === "undefined") return "light";
+  const savedTheme = window.localStorage.getItem("retirement-readiness-theme");
+  if (savedTheme === "light" || savedTheme === "dark") return savedTheme;
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
 function YearTable({ rows }: { rows: RetirementYear[] }) {
   return (
     <div className="table-wrap">
@@ -312,6 +321,7 @@ function ReadinessPanel({ projection, inputs }: { projection: ReturnType<typeof 
 export default function App() {
   const [inputs, setInputs] = useState<RetirementInputs>(defaultInputs);
   const [showTable, setShowTable] = useState(false);
+  const [theme, setTheme] = useState<ThemePreference>(getInitialTheme);
   const projection = useMemo(() => projectRetirement(inputs), [inputs]);
   const cpfPreview = cpfContributionForYear(inputs, inputs.currentAge);
   const retirementRow = projection.rows.find((row) => row.age === inputs.retirementAge);
@@ -335,6 +345,11 @@ export default function App() {
     setInputs((current) => ({ ...current, [key]: value }));
   }
 
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("retirement-readiness-theme", theme);
+  }, [theme]);
+
   return (
     <main className="app-shell">
       <section className="hero">
@@ -346,10 +361,22 @@ export default function App() {
             CPF drawdowns, and CPF LIFE can support your retirement spending.
           </p>
         </div>
-        <button className="reset-button" type="button" onClick={() => setInputs(defaultInputs)}>
-          <RotateCcw size={18} />
-          Reset Sample
-        </button>
+        <div className="hero-actions">
+          <button
+            className="theme-toggle"
+            type="button"
+            onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          >
+            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+            {theme === "dark" ? "Light" : "Dark"}
+          </button>
+          <button className="reset-button" type="button" onClick={() => setInputs(defaultInputs)}>
+            <RotateCcw size={18} />
+            Reset Sample
+          </button>
+        </div>
       </section>
 
       <section className="summary-strip" aria-label="Projection assumptions">

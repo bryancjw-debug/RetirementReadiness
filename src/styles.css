@@ -37,6 +37,40 @@
   --chart-grid: rgba(102, 112, 133, 0.13);
 }
 
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1418;
+  --bg-2: #151d23;
+  --surface: #171d22;
+  --surface-soft: #1d252c;
+  --surface-elevated: #20282f;
+  --surface-glass: rgba(23, 29, 34, 0.84);
+  --input-bg: #11181d;
+  --tooltip-bg: rgba(23, 29, 34, 0.97);
+  --text: #f3f6f8;
+  --muted: #aab4bc;
+  --muted-2: #7d8a94;
+  --line: rgba(231, 236, 239, 0.1);
+  --line-strong: rgba(120, 198, 206, 0.42);
+  --primary: #78c6ce;
+  --secondary: #86b7f0;
+  --blue: var(--primary);
+  --blue-2: #78c6ce;
+  --teal: var(--secondary);
+  --green: #74d99f;
+  --red: #ee7e7e;
+  --amber: #e0b45c;
+  --focus: rgba(120, 198, 206, 0.28);
+  --shadow: 0 28px 90px rgba(0, 0, 0, 0.34);
+  --soft-shadow: 0 18px 46px rgba(0, 0, 0, 0.24);
+  --inner-glow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --chart-primary: #78c6ce;
+  --chart-success: #74d99f;
+  --chart-warning: #e0b45c;
+  --chart-error: #ee7e7e;
+  --chart-grid: rgba(170, 180, 188, 0.13);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -55,6 +89,14 @@ body {
     radial-gradient(circle at 88% 8%, rgba(111, 168, 220, 0.14), transparent 26rem),
     radial-gradient(circle at 50% 110%, rgba(93, 187, 132, 0.08), transparent 34rem),
     linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 54%, var(--bg) 100%);
+}
+
+:root[data-theme="dark"] body {
+  background:
+    radial-gradient(circle at top left, rgba(120, 198, 206, 0.12), transparent 28rem),
+    radial-gradient(circle at 88% 8%, rgba(134, 183, 240, 0.1), transparent 26rem),
+    radial-gradient(circle at 50% 110%, rgba(116, 217, 159, 0.08), transparent 34rem),
+    linear-gradient(180deg, var(--bg) 0%, #0b1115 100%);
 }
 
 button,
@@ -178,7 +220,16 @@ h3 {
   line-height: 1.7;
 }
 
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
 .reset-button,
+.theme-toggle,
 .secondary-action {
   display: inline-flex;
   align-items: center;
@@ -196,6 +247,7 @@ h3 {
 }
 
 .reset-button:hover,
+.theme-toggle:hover,
 .secondary-action:hover {
   border-color: var(--line-strong);
   box-shadow: 0 16px 34px rgba(20, 40, 55, 0.12), var(--inner-glow);
@@ -903,8 +955,37 @@ footer svg {
   flex: 0 0 auto;
 }
 
+:root[data-theme="dark"] .hero,
+:root[data-theme="dark"] .summary-strip,
+:root[data-theme="dark"] .section-card,
+:root[data-theme="dark"] .readiness-panel,
+:root[data-theme="dark"] .metric-card,
+:root[data-theme="dark"] .gap-card,
+:root[data-theme="dark"] .gap-option,
+:root[data-theme="dark"] .chart-card,
+:root[data-theme="dark"] .math-card,
+:root[data-theme="dark"] .table-card {
+  box-shadow: var(--soft-shadow), var(--inner-glow);
+}
+
+:root[data-theme="dark"] .summary-strip div,
+:root[data-theme="dark"] .toggle-row,
+:root[data-theme="dark"] .results-header {
+  background: linear-gradient(180deg, rgba(32, 40, 47, 0.82), rgba(29, 37, 44, 0.72));
+}
+
+:root[data-theme="dark"] .field__input,
+:root[data-theme="dark"] .field select {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+:root[data-theme="dark"] .field__input:focus-within,
+:root[data-theme="dark"] .field select:focus {
+  box-shadow: 0 0 0 5px var(--focus), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     color-scheme: dark;
     --bg: #0f1418;
     --bg-2: #151d23;
@@ -938,7 +1019,7 @@ footer svg {
     --chart-grid: rgba(170, 180, 188, 0.13);
   }
 
-  body {
+  :root:not([data-theme="light"]) body {
     background:
       radial-gradient(circle at top left, rgba(120, 198, 206, 0.12), transparent 28rem),
       radial-gradient(circle at 88% 8%, rgba(134, 183, 240, 0.1), transparent 26rem),
@@ -946,32 +1027,32 @@ footer svg {
       linear-gradient(180deg, var(--bg) 0%, #0b1115 100%);
   }
 
-  .hero,
-  .summary-strip,
-  .section-card,
-  .readiness-panel,
-  .metric-card,
-  .gap-card,
-  .gap-option,
-  .chart-card,
-  .math-card,
-  .table-card {
+  :root:not([data-theme="light"]) .hero,
+  :root:not([data-theme="light"]) .summary-strip,
+  :root:not([data-theme="light"]) .section-card,
+  :root:not([data-theme="light"]) .readiness-panel,
+  :root:not([data-theme="light"]) .metric-card,
+  :root:not([data-theme="light"]) .gap-card,
+  :root:not([data-theme="light"]) .gap-option,
+  :root:not([data-theme="light"]) .chart-card,
+  :root:not([data-theme="light"]) .math-card,
+  :root:not([data-theme="light"]) .table-card {
     box-shadow: var(--soft-shadow), var(--inner-glow);
   }
 
-  .summary-strip div,
-  .toggle-row,
-  .results-header {
+  :root:not([data-theme="light"]) .summary-strip div,
+  :root:not([data-theme="light"]) .toggle-row,
+  :root:not([data-theme="light"]) .results-header {
     background: linear-gradient(180deg, rgba(32, 40, 47, 0.82), rgba(29, 37, 44, 0.72));
   }
 
-  .field__input,
-  .field select {
+  :root:not([data-theme="light"]) .field__input,
+  :root:not([data-theme="light"]) .field select {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
 
-  .field__input:focus-within,
-  .field select:focus {
+  :root:not([data-theme="light"]) .field__input:focus-within,
+  :root:not([data-theme="light"]) .field select:focus {
     box-shadow: 0 0 0 5px var(--focus), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 }
@@ -1035,7 +1116,14 @@ footer svg {
     font-size: 1rem;
   }
 
+  .hero-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+
   .reset-button,
+  .theme-toggle,
   .secondary-action {
     width: 100%;
   }
