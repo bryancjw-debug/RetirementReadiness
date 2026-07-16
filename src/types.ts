@@ -101,10 +101,14 @@ export interface RetirementYear {
 export interface RetirementSummary {
   status: "ready" | "not-ready";
   headline: string;
+  readinessPercent: number;
+  additionalMonthlyRequired: number;
   runwayAge: number;
   finalBalance: number;
   peakBalance: number;
   peakBalanceAge: number;
+  totalRetirementNeed: number;
+  totalFundedRetirementNeed: number;
   firstShortfallAge: number | null;
   totalContributed: number;
   totalSavingsInterest: number;

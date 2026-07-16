@@ -19,7 +19,7 @@ const clampNonNegative = (value: number) => Math.max(0, Number.isFinite(value) ?
 const percentToRate = (value: number) => (Number.isFinite(value) ? value / 100 : 0);
 
 export const defaultInputs: RetirementInputs = {
-  currentAge: 35,
+  currentAge: 58,
   retirementAge: 65,
   endAge: 100,
   currentCashSavings: 50_000,
@@ -35,7 +35,7 @@ export const defaultInputs: RetirementInputs = {
   includeLumpSum: false,
   lumpSumAmount: 0,
   lumpSumAge: 65,
-  includeCpf: false,
+  includeCpf: true,
   cpfWorkStatus: "Not contributing",
   cpfResidency: "Singapore Citizen",
   cpfPrYear: "Third Year Or Later",
@@ -51,7 +51,7 @@ export const defaultInputs: RetirementInputs = {
   cpfRetirementSum: "Full",
   cpfLifePlan: "Standard",
   cpfLifeMonthlyOverride: 0,
-  retirementSpendingAnnual: 60_000,
+  retirementSpendingAnnual: 36_000,
   retirementSpendingInflationRate: 2.5,
   retirementIncomeMethod: "passive",
   fixedWithdrawalAnnual: 60_000,
@@ -405,6 +405,28 @@ function calculateWithdrawal(
   return Math.max(spendingNeed - income, 0);
 }
 
+function additionalMonthlyRequired(inputs: RetirementInputs, rows: RetirementYear[]) {
+  const shortfallRows = rows.filter((row) => row.phase === "retirement" && row.shortfall > 0);
+  if (!shortfallRows.length) return 0;
+
+  const retirementRate = percentToRate(inputs.retirementReturnRate);
+  const preRetirementMonthlyRate = percentToRate(inputs.preRetirementInvestmentReturnRate) / 12;
+  const pvAtRetirement = shortfallRows.reduce((sum, row) => {
+    const yearsAfterRetirement = Math.max(0, row.age - inputs.retirementAge);
+    return sum + row.shortfall / Math.pow(1 + retirementRate, yearsAfterRetirement);
+  }, 0);
+
+  const monthsUntilRetirement = Math.max(0, (inputs.retirementAge - inputs.currentAge) * 12);
+  if (monthsUntilRetirement <= 0) {
+    const remainingMonths = Math.max(1, (inputs.endAge - inputs.currentAge + 1) * 12);
+    return rows.reduce((sum, row) => sum + row.shortfall, 0) / remainingMonths;
+  }
+
+  if (preRetirementMonthlyRate === 0) return pvAtRetirement / monthsUntilRetirement;
+  const accumulationFactor = Math.pow(1 + preRetirementMonthlyRate, monthsUntilRetirement) - 1;
+  return (pvAtRetirement * preRetirementMonthlyRate) / accumulationFactor;
+}
+
 function formRaIfNeeded(inputs: RetirementInputs, cpf: CpfState, age: number) {
   if (!inputs.includeCpf || cpf.raFormed || age < 55) return 0;
 
@@ -628,6 +650,12 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
   const totalPassiveIncome = rows.reduce((sum, row) => sum + row.passiveIncomeGenerated, 0);
   const totalCpfLifeIncome = rows.reduce((sum, row) => sum + row.cpfLifeIncome, 0);
   const totalShortfall = rows.reduce((sum, row) => sum + row.shortfall, 0);
+  const totalRetirementNeed = rows.reduce((sum, row) => sum + row.spendingNeed, 0);
+  const totalFundedRetirementNeed = Math.max(0, totalRetirementNeed - totalShortfall);
+  const readinessPercent = totalRetirementNeed > 0
+    ? Math.min(100, (totalFundedRetirementNeed / totalRetirementNeed) * 100)
+    : 100;
+  const additionalMonthly = additionalMonthlyRequired(inputs, rows);
   const retirementRow = rows.find((row) => row.age === inputs.retirementAge);
   const retirementIncomeAtStart = (retirementRow?.passiveIncomeGenerated ?? 0) + (retirementRow?.cpfLifeIncome ?? 0);
   const incomeCoverageAtRetirement = retirementRow && retirementRow.spendingNeed > 0
@@ -640,10 +668,14 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     headline: firstShortfall
       ? `Not ready yet: shortfall starts at age ${firstShortfall.age}`
       : `Ready through age ${inputs.endAge}`,
+    readinessPercent,
+    additionalMonthlyRequired: additionalMonthly,
     runwayAge: firstShortfall ? Math.max(inputs.retirementAge, firstShortfall.age - 1) : inputs.endAge,
     finalBalance: finalRow.endingBalance,
     peakBalance: peakRow.endingBalance,
     peakBalanceAge: peakRow.age,
+    totalRetirementNeed,
+    totalFundedRetirementNeed,
     firstShortfallAge: firstShortfall?.age ?? null,
     totalContributed,
     totalSavingsInterest,
