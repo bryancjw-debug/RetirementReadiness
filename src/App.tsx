@@ -173,6 +173,26 @@ function MetricCard({
   );
 }
 
+function GapOptionCard({
+  label,
+  value,
+  note,
+  tone = "blue"
+}: {
+  label: string;
+  value: string;
+  note: string;
+  tone?: "good" | "warn" | "blue";
+}) {
+  return (
+    <article className={`gap-option gap-option--${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{note}</small>
+    </article>
+  );
+}
+
 function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string | number }) {
   if (!active || !payload?.length) return null;
   return (
@@ -273,8 +293,8 @@ function ReadinessPanel({ projection, inputs }: { projection: ReturnType<typeof 
           </strong>
         </div>
         <div>
-          <span>Extra Monthly Savings Needed</span>
-          <strong>{formatCurrency(projection.summary.additionalMonthlyRequired)}</strong>
+          <span>Invest More Monthly</span>
+          <strong>{formatCurrency(projection.summary.extraMonthlyInvestmentRequired)}</strong>
         </div>
         <div>
           <span>Funds Last Until</span>
@@ -536,9 +556,40 @@ export default function App() {
         <div className="metric-grid">
           <MetricCard label="Readiness" value={formatPercent(projection.summary.readinessPercent)} note={projection.summary.headline} tone={projection.summary.status === "ready" ? "good" : "warn"} />
           <MetricCard label="Shortfall" value={formatCurrency(projection.summary.totalShortfall)} note="Total unfunded spending gap" tone={projection.summary.totalShortfall > 0 ? "warn" : "good"} />
-          <MetricCard label="Monthly Top-Up Needed" value={formatCurrency(projection.summary.additionalMonthlyRequired)} note="Estimated extra saving or investment before retirement" tone="blue" />
+          <MetricCard label="Invest More Monthly" value={formatCurrency(projection.summary.extraMonthlyInvestmentRequired)} note={`Uses ${formatPercent(inputs.preRetirementInvestmentReturnRate)} investment return`} tone="blue" />
           <MetricCard label="Peak Wealth" value={formatCurrency(projection.summary.peakBalance)} note={`At age ${projection.summary.peakBalanceAge}`} />
         </div>
+
+        <section className="gap-card" aria-labelledby="gap-card-title">
+          <div className="gap-card__copy">
+            <p className="eyebrow">How To Close The Gap</p>
+            <h3 id="gap-card-title">Compare three simple levers.</h3>
+            <p>
+              If the projection has a shortfall, these estimates show the monthly change needed from today.
+              Use the option that feels most realistic for the client.
+            </p>
+          </div>
+          <div className="gap-options">
+            <GapOptionCard
+              label="Save More Cash"
+              value={formatCurrency(projection.summary.extraMonthlyCashSavingsRequired)}
+              note={`Assumes ${formatPercent(inputs.cashInterestRate)} cash savings rate`}
+              tone="blue"
+            />
+            <GapOptionCard
+              label="Invest More"
+              value={formatCurrency(projection.summary.extraMonthlyInvestmentRequired)}
+              note={`Assumes ${formatPercent(inputs.preRetirementInvestmentReturnRate)} return before retirement`}
+              tone="good"
+            />
+            <GapOptionCard
+              label="Spend Less In Retirement"
+              value={formatCurrency(projection.summary.monthlySpendingReductionRequired)}
+              note="Today's monthly spending reduction, inflated by the app over time"
+              tone="warn"
+            />
+          </div>
+        </section>
 
         <div className="chart-grid">
           <article className="chart-card">

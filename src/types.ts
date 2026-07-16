@@ -103,6 +103,9 @@ export interface RetirementSummary {
   headline: string;
   readinessPercent: number;
   additionalMonthlyRequired: number;
+  extraMonthlyCashSavingsRequired: number;
+  extraMonthlyInvestmentRequired: number;
+  monthlySpendingReductionRequired: number;
   runwayAge: number;
   finalBalance: number;
   peakBalance: number;

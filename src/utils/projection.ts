@@ -403,16 +403,27 @@ function calculateWithdrawal(
   return Math.max(spendingNeed - income, 0);
 }
 
-function additionalMonthlyRequired(inputs: RetirementInputs, rows: RetirementYear[]) {
+function presentValueOfRetirementShortfalls(inputs: RetirementInputs, rows: RetirementYear[]) {
   const shortfallRows = rows.filter((row) => row.phase === "retirement" && row.shortfall > 0);
   if (!shortfallRows.length) return 0;
 
   const retirementRate = percentToRate(inputs.retirementReturnRate);
-  const preRetirementMonthlyRate = percentToRate(inputs.preRetirementInvestmentReturnRate) / 12;
-  const pvAtRetirement = shortfallRows.reduce((sum, row) => {
+  return shortfallRows.reduce((sum, row) => {
     const yearsAfterRetirement = Math.max(0, row.age - inputs.retirementAge);
     return sum + row.shortfall / Math.pow(1 + retirementRate, yearsAfterRetirement);
   }, 0);
+}
+
+function additionalMonthlyRequiredAtRate(
+  inputs: RetirementInputs,
+  rows: RetirementYear[],
+  annualAccumulationRate: number
+) {
+  const shortfallRows = rows.filter((row) => row.phase === "retirement" && row.shortfall > 0);
+  if (!shortfallRows.length) return 0;
+
+  const pvAtRetirement = presentValueOfRetirementShortfalls(inputs, rows);
+  const monthlyRate = percentToRate(annualAccumulationRate) / 12;
 
   const monthsUntilRetirement = Math.max(0, (inputs.retirementAge - inputs.currentAge) * 12);
   if (monthsUntilRetirement <= 0) {
@@ -420,9 +431,27 @@ function additionalMonthlyRequired(inputs: RetirementInputs, rows: RetirementYea
     return rows.reduce((sum, row) => sum + row.shortfall, 0) / remainingMonths;
   }
 
-  if (preRetirementMonthlyRate === 0) return pvAtRetirement / monthsUntilRetirement;
-  const accumulationFactor = Math.pow(1 + preRetirementMonthlyRate, monthsUntilRetirement) - 1;
-  return (pvAtRetirement * preRetirementMonthlyRate) / accumulationFactor;
+  if (monthlyRate === 0) return pvAtRetirement / monthsUntilRetirement;
+  const accumulationFactor = Math.pow(1 + monthlyRate, monthsUntilRetirement) - 1;
+  return (pvAtRetirement * monthlyRate) / accumulationFactor;
+}
+
+function additionalMonthlyRequired(inputs: RetirementInputs, rows: RetirementYear[]) {
+  return additionalMonthlyRequiredAtRate(inputs, rows, inputs.preRetirementInvestmentReturnRate);
+}
+
+function monthlySpendingReductionRequired(inputs: RetirementInputs, rows: RetirementYear[]) {
+  const totalShortfall = rows.reduce((sum, row) => sum + row.shortfall, 0);
+  if (totalShortfall <= 0) return 0;
+
+  const inflationRate = percentToRate(inputs.retirementSpendingInflationRate);
+  const spendingFactor = rows.reduce((sum, row) => {
+    if (row.phase !== "retirement" || row.spendingNeed <= 0) return sum;
+    const yearsFromStart = Math.max(0, row.age - inputs.currentAge);
+    return sum + 12 * Math.pow(1 + inflationRate, yearsFromStart);
+  }, 0);
+
+  return spendingFactor > 0 ? totalShortfall / spendingFactor : 0;
 }
 
 function formRaIfNeeded(inputs: RetirementInputs, cpf: CpfState, age: number) {
@@ -659,6 +688,8 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     ? Math.min(100, (totalFundedRetirementNeed / totalRetirementNeed) * 100)
     : 100;
   const additionalMonthly = additionalMonthlyRequired(inputs, rows);
+  const extraMonthlyCashSavingsRequired = additionalMonthlyRequiredAtRate(inputs, rows, inputs.cashInterestRate);
+  const monthlySpendingReduction = monthlySpendingReductionRequired(inputs, rows);
   const retirementRow = rows.find((row) => row.age === inputs.retirementAge);
   const retirementIncomeAtStart = (retirementRow?.passiveIncomeGenerated ?? 0) + (retirementRow?.cpfLifeIncome ?? 0);
   const incomeCoverageAtRetirement = retirementRow && retirementRow.spendingNeed > 0
@@ -673,6 +704,9 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       : `Ready through age ${inputs.endAge}`,
     readinessPercent,
     additionalMonthlyRequired: additionalMonthly,
+    extraMonthlyCashSavingsRequired,
+    extraMonthlyInvestmentRequired: additionalMonthly,
+    monthlySpendingReductionRequired: monthlySpendingReduction,
     runwayAge: firstShortfall ? Math.max(inputs.retirementAge, firstShortfall.age - 1) : inputs.endAge,
     finalBalance: finalRow.endingBalance,
     peakBalance: peakRow.endingBalance,

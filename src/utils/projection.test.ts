@@ -63,6 +63,32 @@ describe("projectRetirement", () => {
     expect(projection.summary.firstShortfallAge).not.toBeNull();
   });
 
+  it("shows separate cash, investment, and spending levers to close a projected gap", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 50,
+      retirementAge: 65,
+      endAge: 90,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      cashInterestRate: 1,
+      preRetirementInvestmentReturnRate: 5,
+      retirementSpendingAnnual: 80_000,
+      includeCpf: false
+    });
+
+    expect(projection.summary.totalShortfall).toBeGreaterThan(0);
+    expect(projection.summary.extraMonthlyCashSavingsRequired).toBeGreaterThan(
+      projection.summary.extraMonthlyInvestmentRequired
+    );
+    expect(projection.summary.monthlySpendingReductionRequired).toBeGreaterThan(0);
+    expect(projection.summary.additionalMonthlyRequired).toBe(
+      projection.summary.extraMonthlyInvestmentRequired
+    );
+  });
+
   it("supports a ready projection through the selected end age", () => {
     const projection = projectRetirement({
       ...defaultInputs,
