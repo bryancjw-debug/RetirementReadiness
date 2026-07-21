@@ -43,6 +43,8 @@ export interface RetirementInputs {
   cpfSa: number;
   cpfMa: number;
   cpfRa: number;
+  cpfOaHousingMonthly: number;
+  cpfMaMedicalPremiumAnnual: number;
   cpfLifeStartAge: number;
   cpfRetirementSum: RetirementSumChoice;
   cpfLifePlan: CpfLifePlan;
@@ -75,6 +77,8 @@ export interface RetirementYear {
   cpfMaContribution: number;
   cpfRaContribution: number;
   medisaveOverflow: number;
+  cpfOaHousingUsage: number;
+  cpfMaMedicalPremium: number;
   passiveIncomeGenerated: number;
   cpfLifeIncome: number;
   spendingNeed: number;
@@ -125,6 +129,13 @@ export interface RetirementSummary {
   incomeCoverageAtRetirement: number;
   cpfLifeMonthlyAtStart: number;
   cpfRetirementSumAt55: number;
+  cpfBasicRetirementSumAt55: number;
+  cpfFullRetirementSumAt55: number;
+  cpfEnhancedRetirementSumAt55: number;
+  projectedCpfRetirementFundingAt55: number;
+  cpfRetirementSumShortfallAt55: number;
+  cpfRetirementSumExcessAt55: number;
+  cpfRetirementSumTierAt55: "Below BRS" | "BRS Met" | "FRS Met" | "ERS Met";
 }
 
 export interface RetirementProjection {

@@ -245,6 +245,8 @@ function YearTable({ rows }: { rows: RetirementYear[] }) {
             <th>CPF MA</th>
             <th>CPF RA</th>
             <th>CPF LIFE Reserve</th>
+            <th>OA Housing Use</th>
+            <th>MA Premiums</th>
             <th>CPF LIFE</th>
             <th>Dividends</th>
             <th>Spending</th>
@@ -265,6 +267,8 @@ function YearTable({ rows }: { rows: RetirementYear[] }) {
               <td>{formatCurrency(row.cpfMa)}</td>
               <td>{formatCurrency(row.cpfRa)}</td>
               <td>{formatCurrency(row.cpfLifeReserve)}</td>
+              <td>{formatCurrency(row.cpfOaHousingUsage)}</td>
+              <td>{formatCurrency(row.cpfMaMedicalPremium)}</td>
               <td>{formatCurrency(row.cpfLifeIncome)}</td>
               <td>{formatCurrency(row.passiveIncomeGenerated)}</td>
               <td>{formatCurrency(row.spendingNeed)}</td>
@@ -325,14 +329,15 @@ export default function App() {
   const projection = useMemo(() => projectRetirement(inputs), [inputs]);
   const cpfPreview = cpfContributionForYear(inputs, inputs.currentAge);
   const retirementRow = projection.rows.find((row) => row.age === inputs.retirementAge);
-  const cpfLifeStartRow = projection.rows.find((row) => row.age === inputs.cpfLifeStartAge);
 
   const chartRows = projection.rows.map((row) => ({
     age: row.age,
     totalWealth: Math.round(row.endingBalance),
     cash: Math.round(row.endingCashSavings),
     investments: Math.round(row.endingInvestments),
-    cpf: Math.round(row.cpfTotal),
+    cpfOa: Math.round(row.cpfOa),
+    cpfRa: Math.round(row.cpfRa + row.cpfLifeReserve),
+    cpfMa: Math.round(row.cpfMa),
     cpfLifeIncome: Math.round(row.cpfLifeIncome),
     passiveIncome: Math.round(row.passiveIncomeGenerated),
     income: Math.round(row.passiveIncomeGenerated + row.cpfLifeIncome),
@@ -492,12 +497,30 @@ export default function App() {
               onChange={(checked) => updateInput("includeCpf", checked)}
             />
             {inputs.includeCpf ? (
-              <div className="field-grid">
-                <NumberField label="CPF OA" prefix="$" value={inputs.cpfOa} onChange={(value) => updateInput("cpfOa", value)} />
-                <NumberField label="CPF SA" prefix="$" value={inputs.cpfSa} onChange={(value) => updateInput("cpfSa", value)} />
-                <NumberField label="CPF MA" prefix="$" value={inputs.cpfMa} onChange={(value) => updateInput("cpfMa", value)} />
-                <NumberField label="CPF RA" helper="Leave as 0 if you are below 55 and RA has not formed." prefix="$" value={inputs.cpfRa} onChange={(value) => updateInput("cpfRa", value)} />
-              </div>
+              <>
+                <div className="field-grid">
+                  <NumberField label="CPF OA" prefix="$" value={inputs.cpfOa} onChange={(value) => updateInput("cpfOa", value)} />
+                  <NumberField label="CPF SA" prefix="$" value={inputs.cpfSa} onChange={(value) => updateInput("cpfSa", value)} />
+                  <NumberField label="CPF MA" prefix="$" value={inputs.cpfMa} onChange={(value) => updateInput("cpfMa", value)} />
+                  <NumberField label="CPF RA" helper="Leave as 0 if you are below 55 and RA has not formed." prefix="$" value={inputs.cpfRa} onChange={(value) => updateInput("cpfRa", value)} />
+                </div>
+                <div className="field-grid">
+                  <NumberField
+                    label="CPF OA Used For Housing Monthly"
+                    helper="Simple estimate for downpayment/loan instalments paid from OA before retirement."
+                    prefix="$"
+                    value={inputs.cpfOaHousingMonthly}
+                    onChange={(value) => updateInput("cpfOaHousingMonthly", value)}
+                  />
+                  <NumberField
+                    label="CPF MA Medical Premiums Yearly"
+                    helper="Estimate MediShield Life, Integrated Shield, CareShield, or other MediSave-paid premiums."
+                    prefix="$"
+                    value={inputs.cpfMaMedicalPremiumAnnual}
+                    onChange={(value) => updateInput("cpfMaMedicalPremiumAnnual", value)}
+                  />
+                </div>
+              </>
             ) : null}
           </Section>
 
@@ -505,9 +528,33 @@ export default function App() {
             {inputs.includeCpf ? (
               <>
                 <div className="mini-metrics">
-                  <MetricCard label="Retirement Sum At 55" value={formatCurrency(projection.summary.cpfRetirementSumAt55)} note="Based on selected retirement sum" tone="blue" />
+                  <MetricCard label="Projected CPF At 55" value={formatCurrency(projection.summary.projectedCpfRetirementFundingAt55)} note={projection.summary.cpfRetirementSumTierAt55} tone={projection.summary.cpfRetirementSumShortfallAt55 > 0 ? "warn" : "good"} />
+                  <MetricCard label="Selected Target" value={formatCurrency(projection.summary.cpfRetirementSumAt55)} note={`${inputs.cpfRetirementSum} retirement sum`} tone="blue" />
                   <MetricCard label="CPF LIFE / Month" value={formatCurrency(projection.summary.cpfLifeMonthlyAtStart)} note={`Starts at age ${inputs.cpfLifeStartAge}`} tone="good" />
-                  <MetricCard label="CPF LIFE First Year" value={formatCurrency(cpfLifeStartRow?.cpfLifeIncome ?? 0)} note="Annual payout estimate" />
+                </div>
+                <div className="cpf-outlook">
+                  <div>
+                    <span>BRS</span>
+                    <strong>{formatCurrency(projection.summary.cpfBasicRetirementSumAt55)}</strong>
+                  </div>
+                  <div>
+                    <span>FRS</span>
+                    <strong>{formatCurrency(projection.summary.cpfFullRetirementSumAt55)}</strong>
+                  </div>
+                  <div>
+                    <span>ERS</span>
+                    <strong>{formatCurrency(projection.summary.cpfEnhancedRetirementSumAt55)}</strong>
+                  </div>
+                  <div className={projection.summary.cpfRetirementSumShortfallAt55 > 0 ? "is-short" : "is-excess"}>
+                    <span>{projection.summary.cpfRetirementSumShortfallAt55 > 0 ? "Target Shortfall" : "Excess Over FRS"}</span>
+                    <strong>
+                      {formatCurrency(
+                        projection.summary.cpfRetirementSumShortfallAt55 > 0
+                          ? projection.summary.cpfRetirementSumShortfallAt55
+                          : projection.summary.cpfRetirementSumExcessAt55
+                      )}
+                    </strong>
+                  </div>
                 </div>
                 <div className="field-grid">
                   <NumberField label="CPF LIFE Start Age" value={inputs.cpfLifeStartAge} onChange={(value) => updateInput("cpfLifeStartAge", value)} />
@@ -623,24 +670,31 @@ export default function App() {
             <div className="chart-card__header">
               <div>
                 <h3>Retirement Wealth By Age</h3>
-                <p>Cash, investments, and CPF balances rising before retirement and drawing down after retirement.</p>
+                <p>Breaks total retirement wealth into cash, investments, CPF OA, CPF RA/LIFE reserve, and CPF MA. MA is tracked, but not used for retirement drawdown.</p>
               </div>
             </div>
+            <ChartLegend
+              items={[
+                { label: "Cash", className: "dot-cash" },
+                { label: "Investments", className: "dot-investments" },
+                { label: "CPF OA", className: "dot-cpf-oa" },
+                { label: "CPF RA / LIFE", className: "dot-cpf-ra" },
+                { label: "CPF MA", className: "dot-cpf-ma" }
+              ]}
+            />
             <div className="chart-frame">
               <div className="chart-frame__inner">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={chartRows} margin={{ top: 12, right: 20, left: 4, bottom: 8 }}>
-                    <defs>
-                      <linearGradient id="wealthFill" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="var(--chart-primary)" stopOpacity={0.48} />
-                        <stop offset="100%" stopColor="var(--chart-primary)" stopOpacity={0.08} />
-                      </linearGradient>
-                    </defs>
                     <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
                     <XAxis dataKey="age" tickLine={false} axisLine={false} />
                     <YAxis tickFormatter={(value) => formatCurrency(Number(value), { compact: true })} tickLine={false} axisLine={false} />
                     <Tooltip content={<ChartTooltip />} />
-                    <Area dataKey="totalWealth" name="Total Retirement Wealth" type="monotone" stroke="var(--chart-primary)" strokeWidth={3} fill="url(#wealthFill)" />
+                    <Area dataKey="cash" name="Cash Savings" type="monotone" stackId="wealth" stroke="var(--chart-cash)" fill="var(--chart-cash)" fillOpacity={0.62} />
+                    <Area dataKey="investments" name="Investments" type="monotone" stackId="wealth" stroke="var(--chart-investments)" fill="var(--chart-investments)" fillOpacity={0.62} />
+                    <Area dataKey="cpfOa" name="CPF OA" type="monotone" stackId="wealth" stroke="var(--chart-cpf-oa)" fill="var(--chart-cpf-oa)" fillOpacity={0.62} />
+                    <Area dataKey="cpfRa" name="CPF RA / LIFE Reserve" type="monotone" stackId="wealth" stroke="var(--chart-cpf-ra)" fill="var(--chart-cpf-ra)" fillOpacity={0.62} />
+                    <Area dataKey="cpfMa" name="CPF MA" type="monotone" stackId="wealth" stroke="var(--chart-cpf-ma)" fill="var(--chart-cpf-ma)" fillOpacity={0.62} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>

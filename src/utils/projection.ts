@@ -47,6 +47,8 @@ export const defaultInputs: RetirementInputs = {
   cpfSa: 0,
   cpfMa: 0,
   cpfRa: 0,
+  cpfOaHousingMonthly: 0,
+  cpfMaMedicalPremiumAnnual: 0,
   cpfLifeStartAge: 65,
   cpfRetirementSum: "Full",
   cpfLifePlan: "Standard",
@@ -359,6 +361,8 @@ export function sanitizeInputs(inputs: RetirementInputs): RetirementInputs {
     cpfSa: clampNonNegative(inputs.cpfSa),
     cpfMa: clampNonNegative(inputs.cpfMa),
     cpfRa: clampNonNegative(inputs.cpfRa),
+    cpfOaHousingMonthly: clampNonNegative(inputs.cpfOaHousingMonthly),
+    cpfMaMedicalPremiumAnnual: clampNonNegative(inputs.cpfMaMedicalPremiumAnnual),
     cpfLifeMonthlyOverride: clampNonNegative(inputs.cpfLifeMonthlyOverride),
     retirementSpendingAnnual: clampNonNegative(inputs.retirementSpendingAnnual),
     retirementSpendingInflationRate: Number.isFinite(inputs.retirementSpendingInflationRate)
@@ -547,6 +551,14 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     cpf.ma += cpfContribution.ma;
     routeRetirementAllocation(inputs, cpf, age, cpfContribution.sa + cpfContribution.ra);
     const contributionMedisaveOverflow = inputs.includeCpf ? applyMedisaveCap(inputs, cpf, age) : 0;
+    const cpfOaHousingUsage = inputs.includeCpf && age < inputs.retirementAge
+      ? Math.min(cpf.oa, inputs.cpfOaHousingMonthly * 12)
+      : 0;
+    cpf.oa -= cpfOaHousingUsage;
+    const cpfMaMedicalPremium = inputs.includeCpf
+      ? Math.min(cpf.ma, inputs.cpfMaMedicalPremiumAnnual)
+      : 0;
+    cpf.ma -= cpfMaMedicalPremium;
 
     const selectedCpfRetirementSum = inputs.includeCpf
       ? cpfTargetForChoice(inputs.cpfRetirementSum, projectionYear(inputs, Math.max(age, 55)))
@@ -643,6 +655,8 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       cpfMaContribution: cpfContribution.ma,
       cpfRaContribution: cpfContribution.ra,
       medisaveOverflow: contributionMedisaveOverflow,
+      cpfOaHousingUsage,
+      cpfMaMedicalPremium,
       passiveIncomeGenerated,
       cpfLifeIncome,
       spendingNeed,
@@ -696,6 +710,27 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     ? Math.min(100, (retirementIncomeAtStart + retirementRow.withdrawal) / retirementRow.spendingNeed * 100)
     : 100;
   const cpfLifeStartRow = rows.find((row) => row.age === inputs.cpfLifeStartAge);
+  const cpfRetirementSumYear = projectionYear(inputs, Math.max(inputs.currentAge, 55));
+  const cpfRetirementSumsAt55 = retirementSumsForYear(cpfRetirementSumYear);
+  const cpfFundingRowAt55 = rows.find((row) => row.age === 55) ?? rows.find((row) => row.age >= 55) ?? rows[0];
+  const projectedCpfRetirementFundingAt55 = inputs.includeCpf
+    ? (cpfFundingRowAt55?.cpfRa ?? 0) + (cpfFundingRowAt55?.cpfLifeReserve ?? 0)
+    : 0;
+  const cpfRetirementSumShortfallAt55 = inputs.includeCpf
+    ? Math.max(0, cpfTargetForChoice(inputs.cpfRetirementSum, cpfRetirementSumYear) - projectedCpfRetirementFundingAt55)
+    : 0;
+  const cpfRetirementSumExcessAt55 = inputs.includeCpf
+    ? Math.max(0, projectedCpfRetirementFundingAt55 - cpfRetirementSumsAt55.frs)
+    : 0;
+  const cpfRetirementSumTierAt55: RetirementSummary["cpfRetirementSumTierAt55"] = !inputs.includeCpf
+    ? "Below BRS"
+    : projectedCpfRetirementFundingAt55 >= cpfRetirementSumsAt55.ers
+      ? "ERS Met"
+      : projectedCpfRetirementFundingAt55 >= cpfRetirementSumsAt55.frs
+        ? "FRS Met"
+        : projectedCpfRetirementFundingAt55 >= cpfRetirementSumsAt55.brs
+          ? "BRS Met"
+          : "Below BRS";
 
   const summary: RetirementSummary = {
     status: firstShortfall ? "not-ready" : "ready",
@@ -725,7 +760,14 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     totalShortfall,
     incomeCoverageAtRetirement,
     cpfLifeMonthlyAtStart: (cpfLifeStartRow?.cpfLifeIncome ?? 0) / 12,
-    cpfRetirementSumAt55: cpfTargetForChoice(inputs.cpfRetirementSum, projectionYear(inputs, 55))
+    cpfRetirementSumAt55: cpfTargetForChoice(inputs.cpfRetirementSum, cpfRetirementSumYear),
+    cpfBasicRetirementSumAt55: cpfRetirementSumsAt55.brs,
+    cpfFullRetirementSumAt55: cpfRetirementSumsAt55.frs,
+    cpfEnhancedRetirementSumAt55: cpfRetirementSumsAt55.ers,
+    projectedCpfRetirementFundingAt55,
+    cpfRetirementSumShortfallAt55,
+    cpfRetirementSumExcessAt55,
+    cpfRetirementSumTierAt55
   };
 
   return { rows, summary };

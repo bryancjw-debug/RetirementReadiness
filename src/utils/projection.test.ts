@@ -463,4 +463,61 @@ describe("projectRetirement", () => {
     expect(age66.cpfOaContribution).toBeGreaterThan(0);
     expect(age66.cpfMaContribution).toBeGreaterThan(0);
   });
+
+  it("deducts estimated CPF OA housing usage before retirement", () => {
+    const withoutHousing = projectRetirement({
+      ...defaultInputs,
+      currentAge: 50,
+      retirementAge: 65,
+      endAge: 55,
+      includeCpf: true,
+      cpfWorkStatus: "Not contributing",
+      grossMonthlyIncome: 0,
+      cpfOa: 200_000,
+      cpfSa: 0,
+      cpfMa: 50_000,
+      cpfOaHousingMonthly: 0
+    });
+    const withHousing = projectRetirement({
+      ...defaultInputs,
+      currentAge: 50,
+      retirementAge: 65,
+      endAge: 55,
+      includeCpf: true,
+      cpfWorkStatus: "Not contributing",
+      grossMonthlyIncome: 0,
+      cpfOa: 200_000,
+      cpfSa: 0,
+      cpfMa: 50_000,
+      cpfOaHousingMonthly: 2_000
+    });
+
+    const housingYear = withHousing.rows.find((row) => row.age === 50)!;
+    expect(housingYear.cpfOaHousingUsage).toBeCloseTo(24_000, 0);
+    expect(withHousing.summary.projectedCpfRetirementFundingAt55).toBeLessThan(
+      withoutHousing.summary.projectedCpfRetirementFundingAt55
+    );
+  });
+
+  it("deducts estimated MediSave-paid medical premiums and leaves MA out of retirement funding target", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 50,
+      retirementAge: 65,
+      endAge: 50,
+      includeCpf: true,
+      cpfWorkStatus: "Not contributing",
+      cpfOa: 0,
+      cpfSa: 0,
+      cpfMa: 50_000,
+      cpfMaMedicalPremiumAnnual: 2_400
+    });
+
+    const firstYear = projection.rows[0];
+    expect(firstYear.cpfMaMedicalPremium).toBeCloseTo(2_400, 0);
+    expect(firstYear.cpfMa).toBeLessThan(50_000 * 1.05);
+    expect(projection.summary.projectedCpfRetirementFundingAt55).toBeGreaterThan(0);
+    expect(projection.summary.projectedCpfRetirementFundingAt55).toBeLessThan(projection.summary.cpfBasicRetirementSumAt55);
+    expect(projection.summary.cpfRetirementSumTierAt55).toBe("Below BRS");
+  });
 });
