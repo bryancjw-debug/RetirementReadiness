@@ -30,7 +30,7 @@ export const defaultInputs: RetirementInputs = {
   annualContributionIncreaseRate: 2,
   cashInterestRate: 1,
   preRetirementInvestmentReturnRate: 5,
-  retirementReturnRate: 3.5,
+  retirementReturnRate: 1,
   passiveIncomeYieldRate: 4,
   includeLumpSum: false,
   lumpSumAmount: 0,
@@ -49,6 +49,7 @@ export const defaultInputs: RetirementInputs = {
   cpfRa: 0,
   cpfOaHousingMonthly: 0,
   cpfMaMedicalPremiumAnnual: 0,
+  cpfOaToRaTransferAt55: 0,
   cpfLifeStartAge: 65,
   cpfRetirementSum: "Full",
   cpfLifePlan: "Standard",
@@ -363,6 +364,7 @@ export function sanitizeInputs(inputs: RetirementInputs): RetirementInputs {
     cpfRa: clampNonNegative(inputs.cpfRa),
     cpfOaHousingMonthly: clampNonNegative(inputs.cpfOaHousingMonthly),
     cpfMaMedicalPremiumAnnual: clampNonNegative(inputs.cpfMaMedicalPremiumAnnual),
+    cpfOaToRaTransferAt55: clampNonNegative(inputs.cpfOaToRaTransferAt55),
     cpfLifeMonthlyOverride: clampNonNegative(inputs.cpfLifeMonthlyOverride),
     retirementSpendingAnnual: clampNonNegative(inputs.retirementSpendingAnnual),
     retirementSpendingInflationRate: Number.isFinite(inputs.retirementSpendingInflationRate)
@@ -461,7 +463,8 @@ function monthlySpendingReductionRequired(inputs: RetirementInputs, rows: Retire
 function formRaIfNeeded(inputs: RetirementInputs, cpf: CpfState, age: number) {
   if (!inputs.includeCpf || cpf.raFormed || age < 55) return 0;
 
-  const target = cpfTargetForChoice(inputs.cpfRetirementSum, projectionYear(inputs, age));
+  const year = projectionYear(inputs, age);
+  const target = cpfTargetForChoice(inputs.cpfRetirementSum, year);
   let needed = Math.max(target - cpf.ra, 0);
   const fromSa = Math.min(cpf.sa, needed);
   cpf.sa -= fromSa;
@@ -475,9 +478,18 @@ function formRaIfNeeded(inputs: RetirementInputs, cpf: CpfState, age: number) {
   // CPF has closed SA for members aged 55 and above; remaining SA is treated as OA-like liquid CPF savings here.
   cpf.oa += cpf.sa;
   cpf.sa = 0;
+
+  const ers = retirementSumsForYear(year).ers;
+  const optionalOaTransfer = Math.min(
+    cpf.oa,
+    inputs.cpfOaToRaTransferAt55,
+    Math.max(0, ers - cpf.ra)
+  );
+  cpf.oa -= optionalOaTransfer;
+  cpf.ra += optionalOaTransfer;
   cpf.raFormed = true;
 
-  return fromSa + fromOa;
+  return fromSa + fromOa + optionalOaTransfer;
 }
 
 function startCpfLifeIfNeeded(inputs: RetirementInputs, cpf: CpfState, age: number) {
@@ -713,8 +725,13 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
   const cpfRetirementSumYear = projectionYear(inputs, Math.max(inputs.currentAge, 55));
   const cpfRetirementSumsAt55 = retirementSumsForYear(cpfRetirementSumYear);
   const cpfFundingRowAt55 = rows.find((row) => row.age === 55) ?? rows.find((row) => row.age >= 55) ?? rows[0];
-  const projectedCpfRetirementFundingAt55 = inputs.includeCpf
+  const projectedCpfOaAt55 = inputs.includeCpf ? (cpfFundingRowAt55?.cpfOa ?? 0) : 0;
+  const projectedCpfRaAt55 = inputs.includeCpf
     ? (cpfFundingRowAt55?.cpfRa ?? 0) + (cpfFundingRowAt55?.cpfLifeReserve ?? 0)
+    : 0;
+  const projectedCpfMaAt55 = inputs.includeCpf ? (cpfFundingRowAt55?.cpfMa ?? 0) : 0;
+  const projectedCpfRetirementFundingAt55 = inputs.includeCpf
+    ? projectedCpfRaAt55
     : 0;
   const cpfRetirementSumShortfallAt55 = inputs.includeCpf
     ? Math.max(0, cpfTargetForChoice(inputs.cpfRetirementSum, cpfRetirementSumYear) - projectedCpfRetirementFundingAt55)
@@ -765,6 +782,9 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     cpfFullRetirementSumAt55: cpfRetirementSumsAt55.frs,
     cpfEnhancedRetirementSumAt55: cpfRetirementSumsAt55.ers,
     projectedCpfRetirementFundingAt55,
+    projectedCpfOaAt55,
+    projectedCpfRaAt55,
+    projectedCpfMaAt55,
     cpfRetirementSumShortfallAt55,
     cpfRetirementSumExcessAt55,
     cpfRetirementSumTierAt55

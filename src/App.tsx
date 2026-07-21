@@ -336,6 +336,7 @@ export default function App() {
     cash: Math.round(row.endingCashSavings),
     investments: Math.round(row.endingInvestments),
     cpfOa: Math.round(row.cpfOa),
+    cpfSa: Math.round(row.cpfSa),
     cpfRa: Math.round(row.cpfRa + row.cpfLifeReserve),
     cpfMa: Math.round(row.cpfMa),
     cpfLifeIncome: Math.round(row.cpfLifeIncome),
@@ -529,6 +530,8 @@ export default function App() {
               <>
                 <div className="mini-metrics">
                   <MetricCard label="Projected CPF At 55" value={formatCurrency(projection.summary.projectedCpfRetirementFundingAt55)} note={projection.summary.cpfRetirementSumTierAt55} tone={projection.summary.cpfRetirementSumShortfallAt55 > 0 ? "warn" : "good"} />
+                  <MetricCard label="CPF OA At 55" value={formatCurrency(projection.summary.projectedCpfOaAt55)} note="Remaining OA after housing and RA transfer" tone="blue" />
+                  <MetricCard label="CPF RA At 55" value={formatCurrency(projection.summary.projectedCpfRaAt55)} note="Amount supporting CPF LIFE payouts" tone="good" />
                   <MetricCard label="Selected Target" value={formatCurrency(projection.summary.cpfRetirementSumAt55)} note={`${inputs.cpfRetirementSum} retirement sum`} tone="blue" />
                   <MetricCard label="CPF LIFE / Month" value={formatCurrency(projection.summary.cpfLifeMonthlyAtStart)} note={`Starts at age ${inputs.cpfLifeStartAge}`} tone="good" />
                 </div>
@@ -558,6 +561,13 @@ export default function App() {
                 </div>
                 <div className="field-grid">
                   <NumberField label="CPF LIFE Start Age" value={inputs.cpfLifeStartAge} onChange={(value) => updateInput("cpfLifeStartAge", value)} />
+                  <NumberField
+                    label="OA To RA Transfer At 55"
+                    helper="Optional. Models moving available OA into RA to increase CPF LIFE payouts, capped by ERS."
+                    prefix="$"
+                    value={inputs.cpfOaToRaTransferAt55}
+                    onChange={(value) => updateInput("cpfOaToRaTransferAt55", value)}
+                  />
                   <SelectField<RetirementSumChoice>
                     label="Retirement Sum"
                     value={inputs.cpfRetirementSum}
@@ -670,7 +680,7 @@ export default function App() {
             <div className="chart-card__header">
               <div>
                 <h3>Retirement Wealth By Age</h3>
-                <p>Breaks total retirement wealth into cash, investments, CPF OA, CPF RA/LIFE reserve, and CPF MA. MA is tracked, but not used for retirement drawdown.</p>
+                <p>Breaks total retirement wealth into cash, investments, CPF OA, CPF SA before age 55, CPF RA/LIFE reserve after age 55, and CPF MA. MA is tracked, but not used for retirement drawdown.</p>
               </div>
             </div>
             <ChartLegend
@@ -678,6 +688,7 @@ export default function App() {
                 { label: "Cash", className: "dot-cash" },
                 { label: "Investments", className: "dot-investments" },
                 { label: "CPF OA", className: "dot-cpf-oa" },
+                { label: "CPF SA", className: "dot-cpf-sa" },
                 { label: "CPF RA / LIFE", className: "dot-cpf-ra" },
                 { label: "CPF MA", className: "dot-cpf-ma" }
               ]}
@@ -693,6 +704,7 @@ export default function App() {
                     <Area dataKey="cash" name="Cash Savings" type="monotone" stackId="wealth" stroke="var(--chart-cash)" fill="var(--chart-cash)" fillOpacity={0.62} />
                     <Area dataKey="investments" name="Investments" type="monotone" stackId="wealth" stroke="var(--chart-investments)" fill="var(--chart-investments)" fillOpacity={0.62} />
                     <Area dataKey="cpfOa" name="CPF OA" type="monotone" stackId="wealth" stroke="var(--chart-cpf-oa)" fill="var(--chart-cpf-oa)" fillOpacity={0.62} />
+                    <Area dataKey="cpfSa" name="CPF SA" type="monotone" stackId="wealth" stroke="var(--chart-cpf-sa)" fill="var(--chart-cpf-sa)" fillOpacity={0.62} />
                     <Area dataKey="cpfRa" name="CPF RA / LIFE Reserve" type="monotone" stackId="wealth" stroke="var(--chart-cpf-ra)" fill="var(--chart-cpf-ra)" fillOpacity={0.62} />
                     <Area dataKey="cpfMa" name="CPF MA" type="monotone" stackId="wealth" stroke="var(--chart-cpf-ma)" fill="var(--chart-cpf-ma)" fillOpacity={0.62} />
                   </AreaChart>

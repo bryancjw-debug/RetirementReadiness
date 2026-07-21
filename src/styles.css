@@ -37,6 +37,7 @@
   --chart-cash: #7a9e9f;
   --chart-investments: #6fa8dc;
   --chart-cpf-oa: #4f9ba6;
+  --chart-cpf-sa: #8a7fcf;
   --chart-cpf-ra: #5dbb84;
   --chart-cpf-ma: #d8a546;
   --chart-grid: rgba(102, 112, 133, 0.13);
@@ -76,6 +77,7 @@
   --chart-cash: #8fb9bf;
   --chart-investments: #86b7f0;
   --chart-cpf-oa: #78c6ce;
+  --chart-cpf-sa: #a59be6;
   --chart-cpf-ra: #74d99f;
   --chart-cpf-ma: #e0b45c;
   --chart-grid: rgba(170, 180, 188, 0.13);
@@ -896,6 +898,10 @@ footer span {
   background: var(--chart-cpf-oa);
 }
 
+.dot-cpf-sa {
+  background: var(--chart-cpf-sa);
+}
+
 .dot-cpf-ra {
   background: var(--chart-cpf-ra);
 }
@@ -1096,6 +1102,7 @@ footer svg {
     --chart-cash: #8fb9bf;
     --chart-investments: #86b7f0;
     --chart-cpf-oa: #78c6ce;
+    --chart-cpf-sa: #a59be6;
     --chart-cpf-ra: #74d99f;
     --chart-cpf-ma: #e0b45c;
     --chart-grid: rgba(170, 180, 188, 0.13);

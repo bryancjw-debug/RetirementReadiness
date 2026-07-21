@@ -202,6 +202,69 @@ describe("projectRetirement", () => {
     expect(enhanced.summary.cpfLifeMonthlyAtStart).toBeGreaterThan(full.summary.cpfLifeMonthlyAtStart);
   });
 
+  it("shows CPF SA before age 55 and converts it into RA at age 55", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 54,
+      retirementAge: 65,
+      endAge: 55,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      includeCpf: true,
+      cpfOa: 100_000,
+      cpfSa: 200_000,
+      cpfMa: 50_000,
+      cpfRetirementSum: "Full"
+    });
+
+    expect(projection.rows.find((row) => row.age === 54)?.cpfSa).toBeGreaterThan(0);
+    expect(projection.rows.find((row) => row.age === 55)?.cpfRa).toBeGreaterThan(0);
+  });
+
+  it("allows optional CPF OA transfer into RA at 55 up to the ERS cap", () => {
+    const withoutTransfer = projectRetirement({
+      ...defaultInputs,
+      currentAge: 54,
+      retirementAge: 65,
+      endAge: 65,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      includeCpf: true,
+      cpfOa: 400_000,
+      cpfSa: 0,
+      cpfMa: 50_000,
+      cpfRetirementSum: "Full",
+      cpfLifeStartAge: 65,
+      cpfOaToRaTransferAt55: 0
+    });
+    const withTransfer = projectRetirement({
+      ...defaultInputs,
+      currentAge: 54,
+      retirementAge: 65,
+      endAge: 65,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      includeCpf: true,
+      cpfOa: 400_000,
+      cpfSa: 0,
+      cpfMa: 50_000,
+      cpfRetirementSum: "Full",
+      cpfLifeStartAge: 65,
+      cpfOaToRaTransferAt55: 100_000
+    });
+
+    expect(withTransfer.summary.projectedCpfRaAt55).toBeGreaterThan(withoutTransfer.summary.projectedCpfRaAt55);
+    expect(withTransfer.summary.projectedCpfOaAt55).toBeLessThan(withoutTransfer.summary.projectedCpfOaAt55);
+    expect(withTransfer.summary.cpfLifeMonthlyAtStart).toBeGreaterThan(withoutTransfer.summary.cpfLifeMonthlyAtStart);
+    expect(withTransfer.summary.projectedCpfRaAt55).toBeLessThanOrEqual(withTransfer.summary.cpfEnhancedRetirementSumAt55);
+  });
+
   it("uses CPF LIFE monthly override from the official estimator when supplied", () => {
     const projection = projectRetirement({
       ...defaultInputs,
