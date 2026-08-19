@@ -2,6 +2,10 @@ export type SavingsFrequency = "monthly" | "yearly";
 
 export type RetirementIncomeMethod = "passive" | "fixed" | "dynamic";
 
+export type CustomIncomeFrequency = "monthly" | "yearly";
+
+export type CustomIncomeGrowthMode = "fixed" | "increasing";
+
 export type RetirementSumChoice = "Basic" | "Full" | "Enhanced";
 
 export type CpfLifePlan = "Standard" | "Basic" | "Escalating";
@@ -13,6 +17,17 @@ export type CpfResidencyStatus = "Singapore Citizen" | "Permanent Resident";
 export type CpfPrYear = "First Year" | "Second Year" | "Third Year Or Later";
 
 export type CpfPrRateType = "Graduated Employer And Employee" | "Full Employer And Graduated Employee" | "Full Employer And Employee";
+
+export interface CustomIncomeStream {
+  id: string;
+  label: string;
+  startAge: number;
+  endAge: number;
+  amount: number;
+  frequency: CustomIncomeFrequency;
+  growthMode: CustomIncomeGrowthMode;
+  annualIncreaseRate: number;
+}
 
 export interface RetirementInputs {
   currentAge: number;
@@ -55,6 +70,7 @@ export interface RetirementInputs {
   retirementIncomeMethod: RetirementIncomeMethod;
   fixedWithdrawalAnnual: number;
   dynamicWithdrawalRate: number;
+  customIncomeStreams: CustomIncomeStream[];
 }
 
 export interface RetirementYear {
@@ -82,6 +98,7 @@ export interface RetirementYear {
   cpfMaMedicalPremium: number;
   passiveIncomeGenerated: number;
   cpfLifeIncome: number;
+  customIncomeGenerated: number;
   spendingNeed: number;
   cashWithdrawal: number;
   investmentWithdrawal: number;
@@ -126,6 +143,7 @@ export interface RetirementSummary {
   totalCpfDrawdown: number;
   totalPassiveIncome: number;
   totalCpfLifeIncome: number;
+  totalCustomIncome: number;
   totalShortfall: number;
   incomeCoverageAtRetirement: number;
   cpfLifeMonthlyAtStart: number;

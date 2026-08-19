@@ -4,6 +4,7 @@ import type {
   CpfPrYear,
   CpfResidencyStatus,
   CpfWorkStatus,
+  CustomIncomeStream,
   RetirementInputs,
   RetirementProjection,
   RetirementSumChoice,
@@ -58,7 +59,8 @@ export const defaultInputs: RetirementInputs = {
   retirementSpendingInflationRate: 2.5,
   retirementIncomeMethod: "passive",
   fixedWithdrawalAnnual: 60_000,
-  dynamicWithdrawalRate: 4
+  dynamicWithdrawalRate: 4,
+  customIncomeStreams: []
 };
 
 export function frsForYear(year: number) {
@@ -319,6 +321,30 @@ type CpfState = {
   lifeStarted: boolean;
 };
 
+function sanitizeCustomIncomeStreams(inputs: RetirementInputs, currentAge: number, endAge: number): CustomIncomeStream[] {
+  return (inputs.customIncomeStreams ?? []).map((stream, index) => {
+    const startAge = Math.min(
+      Math.max(currentAge, Math.floor(clampNonNegative(stream.startAge))),
+      endAge
+    );
+    const endAgeForStream = Math.min(
+      Math.max(startAge, Math.floor(clampNonNegative(stream.endAge))),
+      endAge
+    );
+
+    return {
+      id: stream.id || `custom-income-${index + 1}`,
+      label: stream.label?.trim() || `Income Stream ${index + 1}`,
+      startAge,
+      endAge: endAgeForStream,
+      amount: clampNonNegative(stream.amount),
+      frequency: stream.frequency === "yearly" ? "yearly" : "monthly",
+      growthMode: stream.growthMode === "increasing" ? "increasing" : "fixed",
+      annualIncreaseRate: Number.isFinite(stream.annualIncreaseRate) ? stream.annualIncreaseRate : 0
+    };
+  });
+}
+
 export function sanitizeInputs(inputs: RetirementInputs): RetirementInputs {
   const currentAge = Math.max(18, Math.floor(clampNonNegative(inputs.currentAge)));
   const retirementAge = Math.max(currentAge + 1, Math.floor(clampNonNegative(inputs.retirementAge)));
@@ -371,7 +397,8 @@ export function sanitizeInputs(inputs: RetirementInputs): RetirementInputs {
       ? inputs.retirementSpendingInflationRate
       : 0,
     fixedWithdrawalAnnual: clampNonNegative(inputs.fixedWithdrawalAnnual),
-    dynamicWithdrawalRate: clampNonNegative(inputs.dynamicWithdrawalRate)
+    dynamicWithdrawalRate: clampNonNegative(inputs.dynamicWithdrawalRate),
+    customIncomeStreams: sanitizeCustomIncomeStreams(inputs, currentAge, endAge)
   };
 }
 
@@ -386,6 +413,18 @@ function calculateSpendingNeed(inputs: RetirementInputs, age: number): number {
   if (age < inputs.retirementAge) return 0;
   const yearsFromStart = age - inputs.currentAge;
   return inputs.retirementSpendingAnnual * Math.pow(1 + percentToRate(inputs.retirementSpendingInflationRate), yearsFromStart);
+}
+
+function calculateCustomIncome(inputs: RetirementInputs, age: number): number {
+  return inputs.customIncomeStreams.reduce((sum, stream) => {
+    if (age < stream.startAge || age > stream.endAge || stream.amount <= 0) return sum;
+    const annualBase = stream.frequency === "monthly" ? stream.amount * 12 : stream.amount;
+    const yearsFromStart = age - stream.startAge;
+    const growthMultiplier = stream.growthMode === "increasing"
+      ? Math.pow(1 + percentToRate(stream.annualIncreaseRate), yearsFromStart)
+      : 1;
+    return sum + annualBase * growthMultiplier;
+  }, 0);
 }
 
 function calculateWithdrawal(
@@ -595,7 +634,8 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     const passiveIncomeGenerated = phase === "retirement"
       ? investmentsBeforeGrowth * percentToRate(inputs.passiveIncomeYieldRate)
       : 0;
-    const retirementIncome = passiveIncomeGenerated + cpfLifeIncome;
+    const customIncomeGenerated = phase === "retirement" ? calculateCustomIncome(inputs, age) : 0;
+    const retirementIncome = passiveIncomeGenerated + cpfLifeIncome + customIncomeGenerated;
     const spendingNeed = calculateSpendingNeed(inputs, age);
     const desiredWithdrawal = phase === "retirement"
       ? calculateWithdrawal(inputs, investableOpeningBalance, retirementIncome, spendingNeed, age)
@@ -671,6 +711,7 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       cpfMaMedicalPremium,
       passiveIncomeGenerated,
       cpfLifeIncome,
+      customIncomeGenerated,
       spendingNeed,
       cashWithdrawal,
       investmentWithdrawal,
@@ -707,6 +748,7 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
   const totalCpfDrawdown = rows.reduce((sum, row) => sum + row.cpfDrawdown, 0);
   const totalPassiveIncome = rows.reduce((sum, row) => sum + row.passiveIncomeGenerated, 0);
   const totalCpfLifeIncome = rows.reduce((sum, row) => sum + row.cpfLifeIncome, 0);
+  const totalCustomIncome = rows.reduce((sum, row) => sum + row.customIncomeGenerated, 0);
   const totalShortfall = rows.reduce((sum, row) => sum + row.shortfall, 0);
   const totalRetirementNeed = rows.reduce((sum, row) => sum + row.spendingNeed, 0);
   const totalFundedRetirementNeed = Math.max(0, totalRetirementNeed - totalShortfall);
@@ -717,7 +759,9 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
   const extraMonthlyCashSavingsRequired = additionalMonthlyRequiredAtRate(inputs, rows, inputs.cashInterestRate);
   const monthlySpendingReduction = monthlySpendingReductionRequired(inputs, rows);
   const retirementRow = rows.find((row) => row.age === inputs.retirementAge);
-  const retirementIncomeAtStart = (retirementRow?.passiveIncomeGenerated ?? 0) + (retirementRow?.cpfLifeIncome ?? 0);
+  const retirementIncomeAtStart = (retirementRow?.passiveIncomeGenerated ?? 0)
+    + (retirementRow?.cpfLifeIncome ?? 0)
+    + (retirementRow?.customIncomeGenerated ?? 0);
   const incomeCoverageAtRetirement = retirementRow && retirementRow.spendingNeed > 0
     ? Math.min(100, (retirementIncomeAtStart + retirementRow.withdrawal) / retirementRow.spendingNeed * 100)
     : 100;
@@ -774,6 +818,7 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     totalCpfDrawdown,
     totalPassiveIncome,
     totalCpfLifeIncome,
+    totalCustomIncome,
     totalShortfall,
     incomeCoverageAtRetirement,
     cpfLifeMonthlyAtStart: (cpfLifeStartRow?.cpfLifeIncome ?? 0) / 12,

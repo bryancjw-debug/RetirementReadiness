@@ -63,6 +63,74 @@ describe("projectRetirement", () => {
     expect(projection.summary.firstShortfallAge).not.toBeNull();
   });
 
+  it("uses custom income streams to reduce retirement drawdown and shortfall", () => {
+    const baseInputs = {
+      ...defaultInputs,
+      currentAge: 64,
+      retirementAge: 65,
+      endAge: 66,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      includeCpf: false,
+      retirementSpendingAnnual: 36_000,
+      passiveIncomeYieldRate: 0,
+      customIncomeStreams: []
+    };
+    const withoutCustomIncome = projectRetirement(baseInputs);
+    const withCustomIncome = projectRetirement({
+      ...baseInputs,
+      customIncomeStreams: [
+        {
+          id: "annuity",
+          label: "Annuity",
+          startAge: 65,
+          endAge: 66,
+          amount: 1_000,
+          frequency: "monthly",
+          growthMode: "fixed",
+          annualIncreaseRate: 0
+        }
+      ]
+    });
+
+    expect(withCustomIncome.rows.find((row) => row.age === 65)?.customIncomeGenerated).toBe(12_000);
+    expect(withCustomIncome.summary.totalCustomIncome).toBe(24_000);
+    expect(withCustomIncome.summary.totalShortfall).toBeLessThan(withoutCustomIncome.summary.totalShortfall);
+  });
+
+  it("compounds increasing custom income streams annually from their start age", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 64,
+      retirementAge: 65,
+      endAge: 67,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      includeCpf: false,
+      retirementSpendingAnnual: 0,
+      customIncomeStreams: [
+        {
+          id: "income-plan",
+          label: "Income Plan",
+          startAge: 65,
+          endAge: 67,
+          amount: 12_000,
+          frequency: "yearly",
+          growthMode: "increasing",
+          annualIncreaseRate: 5
+        }
+      ]
+    });
+
+    expect(projection.rows.find((row) => row.age === 65)?.customIncomeGenerated).toBeCloseTo(12_000, 0);
+    expect(projection.rows.find((row) => row.age === 66)?.customIncomeGenerated).toBeCloseTo(12_600, 0);
+    expect(projection.rows.find((row) => row.age === 67)?.customIncomeGenerated).toBeCloseTo(13_230, 0);
+  });
+
   it("shows separate cash, investment, and spending levers to close a projected gap", () => {
     const projection = projectRetirement({
       ...defaultInputs,

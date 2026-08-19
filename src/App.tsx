@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import { BadgeCheck, Calculator, CircleAlert, Moon, RotateCcw, ShieldCheck, Sun } from "lucide-react";
+import { BadgeCheck, Calculator, CircleAlert, Moon, Plus, RotateCcw, ShieldCheck, Sun, Trash2 } from "lucide-react";
 import { cpfContributionForYear, defaultInputs, projectRetirement } from "./utils/projection";
 import { formatCurrency, formatNumber, formatPercent } from "./utils/formatters";
 import type {
@@ -19,6 +19,9 @@ import type {
   CpfPrYear,
   CpfResidencyStatus,
   CpfWorkStatus,
+  CustomIncomeFrequency,
+  CustomIncomeGrowthMode,
+  CustomIncomeStream,
   RetirementIncomeMethod,
   RetirementInputs,
   RetirementSumChoice,
@@ -101,6 +104,33 @@ function SelectField<T extends string>({
           </option>
         ))}
       </select>
+      {helper ? <small>{helper}</small> : null}
+    </label>
+  );
+}
+
+function TextField({
+  label,
+  helper,
+  value,
+  onChange,
+  placeholder
+}: {
+  label: string;
+  helper?: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        type="text"
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+      />
       {helper ? <small>{helper}</small> : null}
     </label>
   );
@@ -230,6 +260,19 @@ function getInitialTheme(): ThemePreference {
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
+function createCustomIncomeStream(inputs: RetirementInputs): CustomIncomeStream {
+  return {
+    id: `income-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    label: "Retirement plan payout",
+    startAge: inputs.retirementAge,
+    endAge: inputs.endAge,
+    amount: 0,
+    frequency: "monthly",
+    growthMode: "fixed",
+    annualIncreaseRate: 0
+  };
+}
+
 function YearTable({ rows }: { rows: RetirementYear[] }) {
   return (
     <div className="table-wrap">
@@ -249,6 +292,7 @@ function YearTable({ rows }: { rows: RetirementYear[] }) {
             <th>MA Premiums</th>
             <th>CPF LIFE</th>
             <th>Dividends</th>
+            <th>Custom Income</th>
             <th>Spending</th>
             <th>Drawdown</th>
             <th>Shortfall</th>
@@ -271,6 +315,7 @@ function YearTable({ rows }: { rows: RetirementYear[] }) {
               <td>{formatCurrency(row.cpfMaMedicalPremium)}</td>
               <td>{formatCurrency(row.cpfLifeIncome)}</td>
               <td>{formatCurrency(row.passiveIncomeGenerated)}</td>
+              <td>{formatCurrency(row.customIncomeGenerated)}</td>
               <td>{formatCurrency(row.spendingNeed)}</td>
               <td>{formatCurrency(row.withdrawal)}</td>
               <td>{formatCurrency(row.shortfall)}</td>
@@ -329,6 +374,15 @@ export default function App() {
   const projection = useMemo(() => projectRetirement(inputs), [inputs]);
   const cpfPreview = cpfContributionForYear(inputs, inputs.currentAge);
   const retirementRow = projection.rows.find((row) => row.age === inputs.retirementAge);
+  const monthlyRetirementSpendingToday = annualToMonthly(inputs.retirementSpendingAnnual);
+  const yearsUntilRetirement = Math.max(0, inputs.retirementAge - inputs.currentAge);
+  const projectedMonthlyRetirementSpending =
+    monthlyRetirementSpendingToday * Math.pow(1 + inputs.retirementSpendingInflationRate / 100, yearsUntilRetirement);
+  const retirementSpendingIncrease =
+    monthlyRetirementSpendingToday > 0
+      ? ((projectedMonthlyRetirementSpending / monthlyRetirementSpendingToday) - 1) * 100
+      : 0;
+  const cpfLifeBridgeYears = Math.max(0, inputs.cpfLifeStartAge - inputs.retirementAge);
 
   const chartRows = projection.rows.map((row) => ({
     age: row.age,
@@ -341,7 +395,8 @@ export default function App() {
     cpfMa: Math.round(row.cpfMa),
     cpfLifeIncome: Math.round(row.cpfLifeIncome),
     passiveIncome: Math.round(row.passiveIncomeGenerated),
-    income: Math.round(row.passiveIncomeGenerated + row.cpfLifeIncome),
+    customIncome: Math.round(row.customIncomeGenerated),
+    income: Math.round(row.passiveIncomeGenerated + row.cpfLifeIncome + row.customIncomeGenerated),
     spending: Math.round(row.spendingNeed),
     drawdown: Math.round(row.withdrawal),
     shortfall: Math.round(row.shortfall)
@@ -349,6 +404,29 @@ export default function App() {
 
   function updateInput<K extends keyof RetirementInputs>(key: K, value: RetirementInputs[K]) {
     setInputs((current) => ({ ...current, [key]: value }));
+  }
+
+  function addCustomIncomeStream() {
+    setInputs((current) => ({
+      ...current,
+      customIncomeStreams: [...current.customIncomeStreams, createCustomIncomeStream(current)]
+    }));
+  }
+
+  function updateCustomIncomeStream(id: string, patch: Partial<CustomIncomeStream>) {
+    setInputs((current) => ({
+      ...current,
+      customIncomeStreams: current.customIncomeStreams.map((stream) => (
+        stream.id === id ? { ...stream, ...patch } : stream
+      ))
+    }));
+  }
+
+  function removeCustomIncomeStream(id: string) {
+    setInputs((current) => ({
+      ...current,
+      customIncomeStreams: current.customIncomeStreams.filter((stream) => stream.id !== id)
+    }));
   }
 
   useEffect(() => {
@@ -414,15 +492,81 @@ export default function App() {
             </div>
           </Section>
 
-          <Section number="2" title="What You Can Save Monthly" helper="Use monthly amounts. The app annualises them and stops them from your retirement age.">
+          <Section number="2" title="Your Retirement Goal" helper="Start with the spending target. This immediately shows how inflation changes the number by retirement age.">
+            <div className="field-grid">
+              <NumberField label="Monthly Retirement Spending" prefix="$" value={monthlyRetirementSpendingToday} onChange={(value) => updateInput("retirementSpendingAnnual", monthlyToAnnual(value))} />
+              <NumberField label="Inflation" suffix="%" step={0.1} value={inputs.retirementSpendingInflationRate} onChange={(value) => updateInput("retirementSpendingInflationRate", value)} />
+            </div>
+            <div className="reality-check" aria-label="Retirement spending preview">
+              <div className="reality-check__copy">
+                <p className="eyebrow">Retirement Reality Check</p>
+                <h3>{formatCurrency(projectedMonthlyRetirementSpending)} per month at age {inputs.retirementAge}</h3>
+                <p>
+                  This uses today's spending and compounds it at {formatPercent(inputs.retirementSpendingInflationRate)} per year until retirement.
+                </p>
+              </div>
+              <div className="reality-check__metrics">
+                <MetricCard label="Today's Monthly Spending" value={formatCurrency(monthlyRetirementSpendingToday)} note="Entered in today's dollars" tone="blue" />
+                <MetricCard label="Projected At Retirement" value={formatCurrency(projectedMonthlyRetirementSpending)} note={`After ${yearsUntilRetirement} years of inflation`} tone="good" />
+                <MetricCard label="Inflation Increase" value={formatPercent(retirementSpendingIncrease)} note="Increase from today's monthly amount" tone="warn" />
+                <MetricCard
+                  label="CPF LIFE Bridge"
+                  value={cpfLifeBridgeYears > 0 ? `${cpfLifeBridgeYears} years` : "No bridge gap"}
+                  note={cpfLifeBridgeYears > 0 ? `Retirement starts before CPF LIFE at age ${inputs.cpfLifeStartAge}` : "CPF LIFE starts by retirement age"}
+                  tone={cpfLifeBridgeYears > 0 ? "warn" : "good"}
+                />
+              </div>
+            </div>
+          </Section>
+
+          <Section number="3" title="What You Have Today" helper="Enter the balances available for retirement. CPF MA is tracked, but not used for retirement drawdown.">
+            <div className="field-grid">
+              <NumberField label="Cash Savings" prefix="$" value={inputs.currentCashSavings} onChange={(value) => updateInput("currentCashSavings", value)} />
+              <NumberField label="Investment Portfolio" prefix="$" value={inputs.currentInvestments} onChange={(value) => updateInput("currentInvestments", value)} />
+            </div>
+            <ToggleRow
+              title="Include CPF Balances"
+              description="Recommended for Singapore users. CPF OA and SA may help fund gaps before true shortfall appears."
+              checked={inputs.includeCpf}
+              onChange={(checked) => updateInput("includeCpf", checked)}
+            />
+            {inputs.includeCpf ? (
+              <>
+                <div className="field-grid">
+                  <NumberField label="CPF OA" prefix="$" value={inputs.cpfOa} onChange={(value) => updateInput("cpfOa", value)} />
+                  <NumberField label="CPF SA" prefix="$" value={inputs.cpfSa} onChange={(value) => updateInput("cpfSa", value)} />
+                  <NumberField label="CPF MA" prefix="$" value={inputs.cpfMa} onChange={(value) => updateInput("cpfMa", value)} />
+                  <NumberField label="CPF RA" helper="Leave as 0 if you are below 55 and RA has not formed." prefix="$" value={inputs.cpfRa} onChange={(value) => updateInput("cpfRa", value)} />
+                </div>
+                <div className="field-grid">
+                  <NumberField
+                    label="CPF OA Used For Housing Monthly"
+                    helper="Simple estimate for downpayment/loan instalments paid from OA before retirement."
+                    prefix="$"
+                    value={inputs.cpfOaHousingMonthly}
+                    onChange={(value) => updateInput("cpfOaHousingMonthly", value)}
+                  />
+                  <NumberField
+                    label="CPF MA Medical Premiums Yearly"
+                    helper="Estimate MediShield Life, Integrated Shield, CareShield, or other MediSave-paid premiums."
+                    prefix="$"
+                    value={inputs.cpfMaMedicalPremiumAnnual}
+                    onChange={(value) => updateInput("cpfMaMedicalPremiumAnnual", value)}
+                  />
+                </div>
+              </>
+            ) : null}
+          </Section>
+
+          <Section number="4" title="What You Can Still Add" helper="Use monthly amounts. The app annualises them and stops them from your retirement age.">
             <div className="field-grid">
               <NumberField label="Monthly Cash Savings" prefix="$" value={inputs.cashSavingsContribution} onChange={(value) => updateInput("cashSavingsContribution", value)} />
               <NumberField label="Monthly Investment Amount" prefix="$" value={inputs.investmentContribution} onChange={(value) => updateInput("investmentContribution", value)} />
               <NumberField label="Yearly Increase" helper="Optional annual increase to your monthly saving amounts." suffix="%" step={0.1} value={inputs.annualContributionIncreaseRate} onChange={(value) => updateInput("annualContributionIncreaseRate", value)} />
+              <NumberField label="Cash Savings Rate" suffix="%" step={0.1} value={inputs.cashInterestRate} onChange={(value) => updateInput("cashInterestRate", value)} />
+              <NumberField label="Investment Return Before Retirement" suffix="%" step={0.1} value={inputs.preRetirementInvestmentReturnRate} onChange={(value) => updateInput("preRetirementInvestmentReturnRate", value)} />
             </div>
-          </Section>
-
-          <Section number="3" title="CPF From Work" helper="Optional. If you are still working, this estimates CPF additions before retirement.">
+            <div className="divider" />
             <ToggleRow
               title="Include CPF Contributions From Income"
               description="Turn this on if you are employed or self-employed before retirement."
@@ -486,45 +630,6 @@ export default function App() {
             )}
           </Section>
 
-          <Section number="4" title="What You Have Today" helper="Enter the balances available for retirement. CPF MA is tracked, but not used for retirement drawdown.">
-            <div className="field-grid">
-              <NumberField label="Cash Savings" prefix="$" value={inputs.currentCashSavings} onChange={(value) => updateInput("currentCashSavings", value)} />
-              <NumberField label="Investment Portfolio" prefix="$" value={inputs.currentInvestments} onChange={(value) => updateInput("currentInvestments", value)} />
-            </div>
-            <ToggleRow
-              title="Include CPF Balances"
-              description="Recommended for Singapore users. CPF OA and SA may help fund gaps before true shortfall appears."
-              checked={inputs.includeCpf}
-              onChange={(checked) => updateInput("includeCpf", checked)}
-            />
-            {inputs.includeCpf ? (
-              <>
-                <div className="field-grid">
-                  <NumberField label="CPF OA" prefix="$" value={inputs.cpfOa} onChange={(value) => updateInput("cpfOa", value)} />
-                  <NumberField label="CPF SA" prefix="$" value={inputs.cpfSa} onChange={(value) => updateInput("cpfSa", value)} />
-                  <NumberField label="CPF MA" prefix="$" value={inputs.cpfMa} onChange={(value) => updateInput("cpfMa", value)} />
-                  <NumberField label="CPF RA" helper="Leave as 0 if you are below 55 and RA has not formed." prefix="$" value={inputs.cpfRa} onChange={(value) => updateInput("cpfRa", value)} />
-                </div>
-                <div className="field-grid">
-                  <NumberField
-                    label="CPF OA Used For Housing Monthly"
-                    helper="Simple estimate for downpayment/loan instalments paid from OA before retirement."
-                    prefix="$"
-                    value={inputs.cpfOaHousingMonthly}
-                    onChange={(value) => updateInput("cpfOaHousingMonthly", value)}
-                  />
-                  <NumberField
-                    label="CPF MA Medical Premiums Yearly"
-                    helper="Estimate MediShield Life, Integrated Shield, CareShield, or other MediSave-paid premiums."
-                    prefix="$"
-                    value={inputs.cpfMaMedicalPremiumAnnual}
-                    onChange={(value) => updateInput("cpfMaMedicalPremiumAnnual", value)}
-                  />
-                </div>
-              </>
-            ) : null}
-          </Section>
-
           <Section number="5" title="CPF LIFE Planning" helper="CPF LIFE begins at the selected start age. If you retire before 65, the app shows the gap before CPF LIFE starts.">
             {inputs.includeCpf ? (
               <>
@@ -585,17 +690,11 @@ export default function App() {
                 </div>
               </>
             ) : (
-              <p className="helper-note">Turn on CPF balances in step 4 to project CPF LIFE.</p>
+              <p className="helper-note">Turn on CPF balances in step 3 to project CPF LIFE.</p>
             )}
           </Section>
 
-          <Section number="6" title="Retirement Spending" helper="Use today's monthly spending. The app inflates it every year at the selected inflation rate.">
-            <div className="field-grid">
-              <NumberField label="Monthly Retirement Spending" prefix="$" value={annualToMonthly(inputs.retirementSpendingAnnual)} onChange={(value) => updateInput("retirementSpendingAnnual", monthlyToAnnual(value))} />
-              <NumberField label="Inflation" suffix="%" step={0.1} value={inputs.retirementSpendingInflationRate} onChange={(value) => updateInput("retirementSpendingInflationRate", value)} />
-              <NumberField label="Cash Savings Rate" suffix="%" step={0.1} value={inputs.cashInterestRate} onChange={(value) => updateInput("cashInterestRate", value)} />
-              <NumberField label="Investment Return Before Retirement" suffix="%" step={0.1} value={inputs.preRetirementInvestmentReturnRate} onChange={(value) => updateInput("preRetirementInvestmentReturnRate", value)} />
-            </div>
+          <Section number="6" title="Other Retirement Income" helper="Add plan payouts, annuities, and portfolio-income assumptions that support retirement spending.">
             <details className="assumption-details">
               <summary>Fine tune retirement income assumptions</summary>
               <div className="field-grid">
@@ -616,6 +715,94 @@ export default function App() {
                 ) : null}
               </div>
             </details>
+            <div className="custom-income-panel">
+              <div className="custom-income-panel__header">
+                <div>
+                  <h3>Other Retirement Income</h3>
+                  <p>
+                    Add annuity, endowment, retirement-plan, or guaranteed payout streams. These payouts reduce
+                    the drawdown needed from cash, investments, CPF OA, and CPF SA.
+                  </p>
+                </div>
+                <button className="secondary-action" type="button" onClick={addCustomIncomeStream}>
+                  <Plus size={18} />
+                  Add Income Stream
+                </button>
+              </div>
+              {inputs.customIncomeStreams.length === 0 ? (
+                <div className="empty-state">
+                  <strong>No extra income streams added.</strong>
+                  <span>Skip this if CPF LIFE and portfolio income are the only retirement income sources.</span>
+                </div>
+              ) : (
+                <div className="custom-income-list">
+                  {inputs.customIncomeStreams.map((stream, index) => (
+                    <article className="custom-income-card" key={stream.id}>
+                      <div className="custom-income-card__top">
+                        <strong>Income Stream {index + 1}</strong>
+                        <button
+                          className="icon-action danger"
+                          type="button"
+                          aria-label={`Remove ${stream.label || `Income Stream ${index + 1}`}`}
+                          onClick={() => removeCustomIncomeStream(stream.id)}
+                        >
+                          <Trash2 size={17} />
+                        </button>
+                      </div>
+                      <div className="field-grid">
+                        <TextField
+                          label="Name"
+                          placeholder="e.g. Annuity payout"
+                          value={stream.label}
+                          onChange={(value) => updateCustomIncomeStream(stream.id, { label: value })}
+                        />
+                        <NumberField
+                          label="Payout Amount"
+                          helper={stream.frequency === "monthly" ? "Monthly payout amount." : "Annual payout amount."}
+                          prefix="$"
+                          value={stream.amount}
+                          onChange={(value) => updateCustomIncomeStream(stream.id, { amount: value })}
+                        />
+                        <NumberField
+                          label="Start Age"
+                          value={stream.startAge}
+                          onChange={(value) => updateCustomIncomeStream(stream.id, { startAge: value })}
+                        />
+                        <NumberField
+                          label="End Age"
+                          value={stream.endAge}
+                          onChange={(value) => updateCustomIncomeStream(stream.id, { endAge: value })}
+                        />
+                        <SelectField<CustomIncomeFrequency>
+                          label="Payout Frequency"
+                          value={stream.frequency}
+                          options={["monthly", "yearly"]}
+                          labels={{ monthly: "Monthly", yearly: "Annually" }}
+                          onChange={(value) => updateCustomIncomeStream(stream.id, { frequency: value })}
+                        />
+                        <SelectField<CustomIncomeGrowthMode>
+                          label="Payout Type"
+                          value={stream.growthMode}
+                          options={["fixed", "increasing"]}
+                          labels={{ fixed: "Fixed amount", increasing: "Increases yearly" }}
+                          onChange={(value) => updateCustomIncomeStream(stream.id, { growthMode: value })}
+                        />
+                        {stream.growthMode === "increasing" ? (
+                          <NumberField
+                            label="Annual Increase"
+                            helper="Compounds yearly after the start age."
+                            suffix="%"
+                            step={0.1}
+                            value={stream.annualIncreaseRate}
+                            onChange={(value) => updateCustomIncomeStream(stream.id, { annualIncreaseRate: value })}
+                          />
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
           </Section>
         </div>
 
@@ -724,6 +911,7 @@ export default function App() {
               items={[
                 { label: "CPF LIFE", className: "dot-primary" },
                 { label: "Dividends", className: "dot-success" },
+                { label: "Custom Income", className: "dot-custom-income" },
                 { label: "Spending", className: "dot-error" },
                 { label: "Drawdown", className: "dot-warning" }
               ]}
@@ -738,6 +926,7 @@ export default function App() {
                     <Tooltip content={<ChartTooltip />} />
                     <Line dataKey="cpfLifeIncome" name="CPF LIFE Income" type="monotone" stroke="var(--chart-primary)" strokeWidth={3} dot={false} />
                     <Line dataKey="passiveIncome" name="Dividends / Passive Income" type="monotone" stroke="var(--chart-success)" strokeWidth={3} dot={false} />
+                    <Line dataKey="customIncome" name="Custom Income" type="monotone" stroke="var(--chart-custom-income)" strokeWidth={3} dot={false} />
                     <Line dataKey="spending" name="Spending Need" type="monotone" stroke="var(--chart-error)" strokeWidth={3} dot={false} />
                     <Line dataKey="drawdown" name="Drawdown Used" type="monotone" stroke="var(--chart-warning)" strokeWidth={3} dot={false} />
                   </LineChart>
@@ -765,6 +954,8 @@ export default function App() {
             <strong>{formatCurrency(projection.summary.totalCpfLifeIncome)}</strong>
             <span>Total Passive Income</span>
             <strong>{formatCurrency(projection.summary.totalPassiveIncome)}</strong>
+            <span>Total Custom Income</span>
+            <strong>{formatCurrency(projection.summary.totalCustomIncome)}</strong>
             <span>Total Drawdown Used</span>
             <strong>{formatCurrency(projection.summary.totalWithdrawn)}</strong>
             <span>Total CPF SA/OA Drawdown</span>

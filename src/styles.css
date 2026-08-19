@@ -34,6 +34,7 @@
   --chart-success: #5dbb84;
   --chart-warning: #d8a546;
   --chart-error: #d96b6b;
+  --chart-custom-income: #8b7ed8;
   --chart-cash: #7a9e9f;
   --chart-investments: #6fa8dc;
   --chart-cpf-oa: #4f9ba6;
@@ -74,6 +75,7 @@
   --chart-success: #74d99f;
   --chart-warning: #e0b45c;
   --chart-error: #ee7e7e;
+  --chart-custom-income: #b7a7ff;
   --chart-cash: #8fb9bf;
   --chart-investments: #86b7f0;
   --chart-cpf-oa: #78c6ce;
@@ -350,6 +352,11 @@ h3 {
   gap: 18px;
 }
 
+.divider {
+  height: 1px;
+  background: var(--line);
+}
+
 .field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -378,6 +385,7 @@ footer span {
 }
 
 .field__input,
+.field > input,
 .field select {
   display: flex;
   align-items: center;
@@ -390,6 +398,7 @@ footer span {
 }
 
 .field__input:focus-within,
+.field > input:focus,
 .field select:focus {
   border-color: var(--primary);
   background: var(--surface-elevated);
@@ -402,7 +411,7 @@ footer span {
   font-weight: 900;
 }
 
-.field input,
+.field__input input,
 .field select {
   width: 100%;
   min-width: 0;
@@ -414,7 +423,16 @@ footer span {
   font-weight: 850;
 }
 
-.field input {
+.field > input {
+  width: 100%;
+  min-width: 0;
+  padding: 0 14px;
+  color: var(--text);
+  font-size: 1.12rem;
+  font-weight: 850;
+}
+
+.field__input input {
   padding: 0 14px;
 }
 
@@ -780,6 +798,112 @@ footer span {
   padding: 0 18px 18px;
 }
 
+.reality-check {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--primary) 12%, transparent), transparent 54%),
+    color-mix(in srgb, var(--surface-soft) 88%, transparent);
+}
+
+.reality-check__copy h3,
+.reality-check__copy p {
+  margin-bottom: 0;
+}
+
+.reality-check__copy h3 {
+  color: var(--primary);
+}
+
+.reality-check__copy p {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.reality-check__metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.custom-income-panel {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--surface-soft) 84%, transparent);
+}
+
+.custom-income-panel__header,
+.custom-income-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.custom-income-panel h3,
+.custom-income-panel p {
+  margin: 0;
+}
+
+.custom-income-panel p,
+.empty-state span {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.empty-state {
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--surface-elevated) 74%, transparent);
+}
+
+.custom-income-list {
+  display: grid;
+  gap: 14px;
+}
+
+.custom-income-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--surface-elevated);
+}
+
+.icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.icon-action:hover {
+  border-color: var(--line-strong);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+
+.icon-action.danger:hover {
+  color: var(--red);
+}
+
 .results-section {
   margin-top: 22px;
 }
@@ -824,7 +948,7 @@ footer span {
 
 .chart-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 18px;
 }
 
@@ -886,6 +1010,10 @@ footer span {
   background: var(--chart-error);
 }
 
+.dot-custom-income {
+  background: var(--chart-custom-income);
+}
+
 .dot-cash {
   background: var(--chart-cash);
 }
@@ -912,7 +1040,7 @@ footer span {
 
 .chart-frame {
   width: 100%;
-  height: 390px;
+  height: 440px;
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
@@ -1099,6 +1227,7 @@ footer svg {
     --chart-success: #74d99f;
     --chart-warning: #e0b45c;
     --chart-error: #ee7e7e;
+    --chart-custom-income: #b7a7ff;
     --chart-cash: #8fb9bf;
     --chart-investments: #86b7f0;
     --chart-cpf-oa: #78c6ce;
@@ -1223,7 +1352,8 @@ footer svg {
   }
 
   .field-grid,
-  .mini-metrics {
+  .mini-metrics,
+  .reality-check__metrics {
     grid-template-columns: 1fr;
   }
 
@@ -1249,6 +1379,11 @@ footer svg {
   }
 
   .chart-card__header {
+    display: grid;
+  }
+
+  .custom-income-panel__header,
+  .custom-income-card__top {
     display: grid;
   }
 
