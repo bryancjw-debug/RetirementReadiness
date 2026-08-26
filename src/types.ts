@@ -8,6 +8,8 @@ export type CustomIncomeFrequency = "monthly" | "yearly";
 
 export type CustomIncomeGrowthMode = "fixed" | "increasing";
 
+export type OneTimeEventDirection = "inflow" | "outflow";
+
 export type RetirementSumChoice = "Basic" | "Full" | "Enhanced";
 
 export type CpfLifePlan = "Standard" | "Basic" | "Escalating";
@@ -29,6 +31,14 @@ export interface CustomIncomeStream {
   frequency: CustomIncomeFrequency;
   growthMode: CustomIncomeGrowthMode;
   annualIncreaseRate: number;
+}
+
+export interface OneTimeFinancialEvent {
+  id: string;
+  label: string;
+  age: number;
+  amount: number;
+  direction: OneTimeEventDirection;
 }
 
 export interface RetirementInputs {
@@ -77,6 +87,14 @@ export interface RetirementInputs {
   fixedWithdrawalAnnual: number;
   dynamicWithdrawalRate: number;
   customIncomeStreams: CustomIncomeStream[];
+  includeOneTimeEvents: boolean;
+  oneTimeEvents: OneTimeFinancialEvent[];
+  includeSrs: boolean;
+  srsCurrentBalance: number;
+  srsAnnualContribution: number;
+  srsContributionEndAge: number;
+  srsReturnRate: number;
+  srsFirstWithdrawalAge: number;
 }
 
 export interface RetirementYear {
@@ -89,6 +107,8 @@ export interface RetirementYear {
   cashContribution: number;
   investmentContribution: number;
   lumpSum: number;
+  oneTimeInflow: number;
+  oneTimeOutflow: number;
   savingsInterest: number;
   investmentGrowth: number;
   activeIncomeAnnual: number;
@@ -105,6 +125,10 @@ export interface RetirementYear {
   passiveIncomeGenerated: number;
   cpfLifeIncome: number;
   customIncomeGenerated: number;
+  srsContribution: number;
+  srsGrowth: number;
+  srsWithdrawal: number;
+  srsBalance: number;
   healthcareCost: number;
   spendingNeed: number;
   cashWithdrawal: number;
@@ -151,6 +175,9 @@ export interface RetirementSummary {
   totalPassiveIncome: number;
   totalCpfLifeIncome: number;
   totalCustomIncome: number;
+  totalSrsContributions: number;
+  totalSrsGrowth: number;
+  totalSrsWithdrawals: number;
   totalHealthcareCosts: number;
   totalShortfall: number;
   incomeCoverageAtRetirement: number;

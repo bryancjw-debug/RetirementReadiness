@@ -1094,6 +1094,16 @@ footer span {
   background: color-mix(in srgb, var(--surface-soft) 84%, transparent);
 }
 
+.optional-planning-panel {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.optional-planning-panel > .toggle-row {
+  margin: 0;
+}
+
 .custom-income-panel__header,
 .custom-income-card__top {
   display: flex;

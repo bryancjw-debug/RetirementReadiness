@@ -5,6 +5,7 @@ import type {
   CpfResidencyStatus,
   CpfWorkStatus,
   CustomIncomeStream,
+  OneTimeFinancialEvent,
   RetirementInputs,
   RetirementProjection,
   RetirementSumChoice,
@@ -20,7 +21,7 @@ const clampNonNegative = (value: number) => Math.max(0, Number.isFinite(value) ?
 const percentToRate = (value: number) => (Number.isFinite(value) ? value / 100 : 0);
 
 export const defaultInputs: RetirementInputs = {
-  currentAge: 58,
+  currentAge: 30,
   retirementAge: 65,
   endAge: 100,
   currentCashSavings: 50_000,
@@ -64,7 +65,15 @@ export const defaultInputs: RetirementInputs = {
   retirementIncomeMethod: "passive",
   fixedWithdrawalAnnual: 60_000,
   dynamicWithdrawalRate: 4,
-  customIncomeStreams: []
+  customIncomeStreams: [],
+  includeOneTimeEvents: false,
+  oneTimeEvents: [],
+  includeSrs: false,
+  srsCurrentBalance: 0,
+  srsAnnualContribution: 0,
+  srsContributionEndAge: 65,
+  srsReturnRate: 2.5,
+  srsFirstWithdrawalAge: 63
 };
 
 export function frsForYear(year: number) {
@@ -349,6 +358,16 @@ function sanitizeCustomIncomeStreams(inputs: RetirementInputs, currentAge: numbe
   });
 }
 
+function sanitizeOneTimeEvents(inputs: RetirementInputs, currentAge: number, endAge: number): OneTimeFinancialEvent[] {
+  return (inputs.oneTimeEvents ?? []).map((event, index) => ({
+    id: event.id || `one-time-${index + 1}`,
+    label: event.label?.trim() || `Financial Event ${index + 1}`,
+    age: Math.min(endAge, Math.max(currentAge, Math.floor(clampNonNegative(event.age)))),
+    amount: clampNonNegative(event.amount),
+    direction: event.direction === "outflow" ? "outflow" : "inflow"
+  }));
+}
+
 export function sanitizeInputs(inputs: RetirementInputs): RetirementInputs {
   const currentAge = Math.max(18, Math.floor(clampNonNegative(inputs.currentAge)));
   const retirementAge = Math.max(currentAge + 1, Math.floor(clampNonNegative(inputs.retirementAge)));
@@ -410,7 +429,15 @@ export function sanitizeInputs(inputs: RetirementInputs): RetirementInputs {
     healthcareInflationRate: 0,
     fixedWithdrawalAnnual: clampNonNegative(inputs.fixedWithdrawalAnnual),
     dynamicWithdrawalRate: clampNonNegative(inputs.dynamicWithdrawalRate),
-    customIncomeStreams: sanitizeCustomIncomeStreams(inputs, currentAge, endAge)
+    customIncomeStreams: sanitizeCustomIncomeStreams(inputs, currentAge, endAge),
+    includeOneTimeEvents: Boolean(inputs.includeOneTimeEvents),
+    oneTimeEvents: sanitizeOneTimeEvents(inputs, currentAge, endAge),
+    includeSrs: Boolean(inputs.includeSrs),
+    srsCurrentBalance: clampNonNegative(inputs.srsCurrentBalance),
+    srsAnnualContribution: clampNonNegative(inputs.srsAnnualContribution),
+    srsContributionEndAge: Math.min(endAge, Math.max(currentAge, Math.floor(clampNonNegative(inputs.srsContributionEndAge)))),
+    srsReturnRate: Number.isFinite(inputs.srsReturnRate) ? inputs.srsReturnRate : 0,
+    srsFirstWithdrawalAge: Math.min(endAge, Math.max(62, Math.floor(clampNonNegative(inputs.srsFirstWithdrawalAge))))
   };
 }
 
@@ -445,6 +472,15 @@ function calculateCustomIncome(inputs: RetirementInputs, age: number): number {
       : 1;
     return sum + annualBase * growthMultiplier;
   }, 0);
+}
+
+function oneTimeEventTotals(inputs: RetirementInputs, age: number) {
+  if (!inputs.includeOneTimeEvents) return { inflow: 0, outflow: 0 };
+  return inputs.oneTimeEvents.reduce((totals, event) => {
+    if (event.age !== age || event.amount <= 0) return totals;
+    totals[event.direction] += event.amount;
+    return totals;
+  }, { inflow: 0, outflow: 0 });
 }
 
 function calculateWithdrawal(
@@ -601,6 +637,8 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
   const rows: RetirementYear[] = [];
   let cashBalance = inputs.currentCashSavings;
   let investmentBalance = inputs.currentInvestments;
+  let srsBalance = inputs.includeSrs ? inputs.srsCurrentBalance : 0;
+  let srsWithdrawalBase = 0;
   const cpf: CpfState = {
     oa: inputs.includeCpf ? inputs.cpfOa : 0,
     sa: inputs.includeCpf ? inputs.cpfSa : 0,
@@ -617,6 +655,20 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     formRaIfNeeded(inputs, cpf, age);
     startCpfLifeIfNeeded(inputs, cpf, age);
     const activeIncome = activeIncomeAnnual(inputs, age);
+    const eventTotals = oneTimeEventTotals(inputs, age);
+    const srsContribution = inputs.includeSrs && age < inputs.retirementAge && age <= inputs.srsContributionEndAge && age < inputs.srsFirstWithdrawalAge
+      ? inputs.srsAnnualContribution
+      : 0;
+    const srsOpeningBalance = srsBalance;
+    srsBalance += srsContribution;
+    const srsGrowth = srsBalance * percentToRate(inputs.srsReturnRate);
+    srsBalance += srsGrowth;
+    let srsWithdrawal = 0;
+    if (inputs.includeSrs && age >= inputs.srsFirstWithdrawalAge && age < inputs.srsFirstWithdrawalAge + 10) {
+      if (srsWithdrawalBase <= 0) srsWithdrawalBase = srsBalance;
+      srsWithdrawal = Math.min(srsBalance, srsWithdrawalBase / 10);
+      srsBalance -= srsWithdrawal;
+    }
     const cpfContribution = inputs.includeCpf ? cpfContributionForYear(inputs, age) : { oa: 0, sa: 0, ma: 0, ra: 0, total: 0, employee: 0, employer: 0 };
     cpf.oa += cpfContribution.oa;
     cpf.ma += cpfContribution.ma;
@@ -644,7 +696,8 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     const cashContribution = calculateAnnualContribution(inputs, age, inputs.cashSavingsContribution);
     const investmentContribution = calculateAnnualContribution(inputs, age, inputs.investmentContribution);
     const lumpSum = inputs.includeLumpSum && age === inputs.lumpSumAge ? inputs.lumpSumAmount : 0;
-    const cashBeforeGrowth = openingCashSavings + cashContribution;
+    const cashBeforeGrowth = openingCashSavings + cashContribution + eventTotals.inflow
+      + (phase === "build-up" ? srsWithdrawal : 0);
     const investmentsBeforeGrowth = openingInvestments + investmentContribution + lumpSum;
     const savingsInterest = cashBeforeGrowth * percentToRate(inputs.cashInterestRate);
     const investmentReturnRate = phase === "build-up"
@@ -655,12 +708,14 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       ? investmentsBeforeGrowth * percentToRate(inputs.passiveIncomeYieldRate)
       : 0;
     const customIncomeGenerated = phase === "retirement" ? calculateCustomIncome(inputs, age) : 0;
-    const retirementIncome = passiveIncomeGenerated + cpfLifeIncome + customIncomeGenerated;
+    const retirementIncome = phase === "retirement"
+      ? passiveIncomeGenerated + cpfLifeIncome + customIncomeGenerated + srsWithdrawal
+      : 0;
     const healthcareCost = calculateHealthcareCost(inputs, age);
     const spendingNeed = calculateSpendingNeed(inputs, age) + healthcareCost;
     const desiredWithdrawal = phase === "retirement"
-      ? calculateWithdrawal(inputs, investableOpeningBalance, retirementIncome, spendingNeed, age)
-      : 0;
+      ? Math.max(0, calculateWithdrawal(inputs, investableOpeningBalance, retirementIncome, spendingNeed + eventTotals.outflow, age))
+      : eventTotals.outflow;
     const cashAvailableForWithdrawal = cashBeforeGrowth + savingsInterest;
     const investmentsAvailableForWithdrawal = investmentsBeforeGrowth + investmentGrowth;
     const cashWithdrawal = Math.min(desiredWithdrawal, cashAvailableForWithdrawal);
@@ -669,7 +724,7 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       investmentsAvailableForWithdrawal
     );
     const gapAfterCashAndInvestments = phase === "retirement"
-      ? Math.max(spendingNeed - retirementIncome - cashWithdrawal - investmentWithdrawal, 0)
+      ? Math.max(spendingNeed + eventTotals.outflow - retirementIncome - cashWithdrawal - investmentWithdrawal, 0)
       : 0;
     const cpfSaDrawdown = inputs.includeCpf ? Math.min(cpf.sa, gapAfterCashAndInvestments) : 0;
     cpf.sa -= cpfSaDrawdown;
@@ -680,8 +735,8 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     const cpfDrawdown = cpfSaDrawdown + cpfOaDrawdown;
     const withdrawal = cashWithdrawal + investmentWithdrawal + cpfDrawdown;
     const shortfall = phase === "retirement"
-      ? Math.max(spendingNeed - retirementIncome - withdrawal, 0)
-      : 0;
+      ? Math.max(spendingNeed + eventTotals.outflow - retirementIncome - withdrawal, 0)
+      : Math.max(eventTotals.outflow - withdrawal, 0);
     const endingCashSavings = Math.max(cashAvailableForWithdrawal - cashWithdrawal, 0);
     const endingInvestments = Math.max(investmentsAvailableForWithdrawal - investmentWithdrawal, 0);
 
@@ -705,18 +760,20 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     }
 
     const cpfTotal = cpf.oa + cpf.sa + cpf.ma + cpf.ra;
-    const endingBalance = endingCashSavings + endingInvestments + cpfTotal;
+    const endingBalance = endingCashSavings + endingInvestments + cpfTotal + srsBalance;
 
     rows.push({
       age,
       yearIndex: age - inputs.currentAge,
       phase,
-      openingBalance: investableOpeningBalance + cpfTotal,
+      openingBalance: investableOpeningBalance + cpfTotal + srsOpeningBalance,
       openingCashSavings,
       openingInvestments,
       cashContribution,
       investmentContribution,
       lumpSum,
+      oneTimeInflow: eventTotals.inflow,
+      oneTimeOutflow: eventTotals.outflow,
       savingsInterest,
       investmentGrowth,
       activeIncomeAnnual: activeIncome,
@@ -733,6 +790,10 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       passiveIncomeGenerated,
       cpfLifeIncome,
       customIncomeGenerated,
+      srsContribution,
+      srsGrowth,
+      srsWithdrawal,
+      srsBalance,
       healthcareCost,
       spendingNeed,
       cashWithdrawal,
@@ -771,6 +832,9 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
   const totalPassiveIncome = rows.reduce((sum, row) => sum + row.passiveIncomeGenerated, 0);
   const totalCpfLifeIncome = rows.reduce((sum, row) => sum + row.cpfLifeIncome, 0);
   const totalCustomIncome = rows.reduce((sum, row) => sum + row.customIncomeGenerated, 0);
+  const totalSrsContributions = rows.reduce((sum, row) => sum + row.srsContribution, 0);
+  const totalSrsGrowth = rows.reduce((sum, row) => sum + row.srsGrowth, 0);
+  const totalSrsWithdrawals = rows.reduce((sum, row) => sum + row.srsWithdrawal, 0);
   const totalHealthcareCosts = rows.reduce((sum, row) => sum + row.healthcareCost, 0);
   const totalShortfall = rows.reduce((sum, row) => sum + row.shortfall, 0);
   const totalRetirementNeed = rows.reduce((sum, row) => sum + row.spendingNeed, 0);
@@ -851,6 +915,9 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     totalPassiveIncome,
     totalCpfLifeIncome,
     totalCustomIncome,
+    totalSrsContributions,
+    totalSrsGrowth,
+    totalSrsWithdrawals,
     totalHealthcareCosts,
     totalShortfall,
     incomeCoverageAtRetirement,

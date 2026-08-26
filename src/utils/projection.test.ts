@@ -210,6 +210,58 @@ describe("projectRetirement", () => {
     expect(withLumpSum.rows.at(-1)?.lumpSum).toBe(500_000);
   });
 
+  it("applies enabled one-time events only at their selected age", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 40,
+      retirementAge: 65,
+      endAge: 66,
+      currentCashSavings: 100_000,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      includeCpf: false,
+      includeOneTimeEvents: true,
+      oneTimeEvents: [
+        { id: "sale", label: "Sale", age: 50, amount: 20_000, direction: "inflow" },
+        { id: "car", label: "Car", age: 60, amount: 10_000, direction: "outflow" }
+      ]
+    });
+
+    expect(projection.rows.find((row) => row.age === 49)?.oneTimeInflow).toBe(0);
+    expect(projection.rows.find((row) => row.age === 50)?.oneTimeInflow).toBe(20_000);
+    expect(projection.rows.find((row) => row.age === 50)?.oneTimeOutflow).toBe(0);
+    expect(projection.rows.find((row) => row.age === 60)?.oneTimeOutflow).toBe(10_000);
+    expect(projection.rows.find((row) => row.age === 61)?.oneTimeOutflow).toBe(0);
+  });
+
+  it("projects SRS contributions and spreads withdrawals over the ten-year window", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 60,
+      retirementAge: 65,
+      endAge: 74,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      includeCpf: false,
+      includeSrs: true,
+      srsCurrentBalance: 100_000,
+      srsAnnualContribution: 10_000,
+      srsContributionEndAge: 64,
+      srsReturnRate: 0,
+      srsFirstWithdrawalAge: 65
+    });
+
+    expect(projection.summary.totalSrsContributions).toBe(50_000);
+    expect(projection.rows.find((row) => row.age === 64)?.srsBalance).toBe(150_000);
+    expect(projection.rows.find((row) => row.age === 65)?.srsWithdrawal).toBe(15_000);
+    expect(projection.rows.find((row) => row.age === 74)?.srsWithdrawal).toBe(15_000);
+    expect(projection.summary.totalSrsWithdrawals).toBe(150_000);
+    expect(projection.rows.at(-1)?.srsBalance).toBe(0);
+  });
+
   it("forms CPF RA at age 55 and estimates CPF LIFE income from the selected sum", () => {
     const projection = projectRetirement({
       ...defaultInputs,

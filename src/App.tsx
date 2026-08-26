@@ -22,6 +22,8 @@ import type {
   CustomIncomeFrequency,
   CustomIncomeGrowthMode,
   CustomIncomeStream,
+  OneTimeEventDirection,
+  OneTimeFinancialEvent,
   RetirementIncomeMethod,
   RetirementInputs,
   RetirementLifestylePreset,
@@ -322,6 +324,16 @@ function createCustomIncomeStream(inputs: RetirementInputs): CustomIncomeStream 
   };
 }
 
+function createOneTimeEvent(inputs: RetirementInputs): OneTimeFinancialEvent {
+  return {
+    id: `event-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    label: "",
+    age: Math.max(inputs.currentAge, inputs.retirementAge),
+    amount: 0,
+    direction: "outflow"
+  };
+}
+
 function YearTable({ rows }: { rows: RetirementYear[] }) {
   return (
     <div className="table-wrap">
@@ -337,11 +349,13 @@ function YearTable({ rows }: { rows: RetirementYear[] }) {
             <th>CPF MA</th>
             <th>CPF RA</th>
             <th>CPF LIFE Reserve</th>
+            <th>SRS Balance</th>
             <th>OA Housing Use</th>
             <th>MA Premiums</th>
             <th>CPF LIFE</th>
             <th>Dividends</th>
             <th>Custom Income</th>
+            <th>SRS Withdrawal</th>
             <th>Healthcare Costs</th>
             <th>Spending</th>
             <th>Cash Drawdown</th>
@@ -364,11 +378,13 @@ function YearTable({ rows }: { rows: RetirementYear[] }) {
               <td>{formatCurrency(row.cpfMa)}</td>
               <td>{formatCurrency(row.cpfRa)}</td>
               <td>{formatCurrency(row.cpfLifeReserve)}</td>
+              <td>{formatCurrency(row.srsBalance)}</td>
               <td>{formatCurrency(row.cpfOaHousingUsage)}</td>
               <td>{formatCurrency(row.cpfMaMedicalPremium)}</td>
               <td>{formatCurrency(row.cpfLifeIncome)}</td>
               <td>{formatCurrency(row.passiveIncomeGenerated)}</td>
               <td>{formatCurrency(row.customIncomeGenerated)}</td>
+              <td>{formatCurrency(row.srsWithdrawal)}</td>
               <td>{formatCurrency(row.healthcareCost)}</td>
               <td>{formatCurrency(row.spendingNeed)}</td>
               <td>{formatCurrency(row.cashWithdrawal)}</td>
@@ -441,7 +457,7 @@ export default function App() {
   const drawdownTotals = projection.rows.reduce(
     (totals, row) => {
       if (row.phase !== "retirement") return totals;
-      totals.retirementIncome += row.cpfLifeIncome + row.passiveIncomeGenerated + row.customIncomeGenerated;
+      totals.retirementIncome += row.cpfLifeIncome + row.passiveIncomeGenerated + row.customIncomeGenerated + row.srsWithdrawal;
       totals.cash += row.cashWithdrawal;
       totals.investments += row.investmentWithdrawal;
       totals.cpf += row.cpfDrawdown;
@@ -464,11 +480,13 @@ export default function App() {
     cpfSa: Math.round(row.cpfSa),
     cpfRa: Math.round(row.cpfRa + row.cpfLifeReserve),
     cpfMa: Math.round(row.cpfMa),
+    srs: Math.round(row.srsBalance),
     cpfLifeIncome: Math.round(row.cpfLifeIncome),
     passiveIncome: Math.round(row.passiveIncomeGenerated),
     customIncome: Math.round(row.customIncomeGenerated),
+    srsIncome: Math.round(row.srsWithdrawal),
     healthcareCost: Math.round(row.healthcareCost),
-    income: Math.round(row.passiveIncomeGenerated + row.cpfLifeIncome + row.customIncomeGenerated),
+    income: Math.round(row.passiveIncomeGenerated + row.cpfLifeIncome + row.customIncomeGenerated + row.srsWithdrawal),
     spending: Math.round(row.spendingNeed),
     cashWithdrawal: Math.round(row.cashWithdrawal),
     investmentWithdrawal: Math.round(row.investmentWithdrawal),
@@ -500,6 +518,29 @@ export default function App() {
     setInputs((current) => ({
       ...current,
       customIncomeStreams: current.customIncomeStreams.filter((stream) => stream.id !== id)
+    }));
+  }
+
+  function addOneTimeEvent() {
+    setInputs((current) => ({
+      ...current,
+      oneTimeEvents: [...current.oneTimeEvents, createOneTimeEvent(current)]
+    }));
+  }
+
+  function updateOneTimeEvent(id: string, patch: Partial<OneTimeFinancialEvent>) {
+    setInputs((current) => ({
+      ...current,
+      oneTimeEvents: current.oneTimeEvents.map((event) => (
+        event.id === id ? { ...event, ...patch } : event
+      ))
+    }));
+  }
+
+  function removeOneTimeEvent(id: string) {
+    setInputs((current) => ({
+      ...current,
+      oneTimeEvents: current.oneTimeEvents.filter((event) => event.id !== id)
     }));
   }
 
@@ -560,7 +601,12 @@ export default function App() {
         <div className="input-flow">
           <Section number="1" title="About You" helper="These ages decide when saving stops, retirement spending starts, and when CPF LIFE begins.">
             <div className="field-grid">
-              <NumberField label="Current Age" value={inputs.currentAge} onChange={(value) => updateInput("currentAge", value)} />
+              <NumberField
+                label="Current Age"
+                helper="Required to anchor the projection. The sample starts at age 30."
+                value={inputs.currentAge}
+                onChange={(value) => updateInput("currentAge", value)}
+              />
               <NumberField label="Retirement Age" value={inputs.retirementAge} onChange={(value) => updateInput("retirementAge", value)} />
               <NumberField label="Project Until Age" helper="Use 90 or 100 if unsure." value={inputs.endAge} onChange={(value) => updateInput("endAge", value)} />
             </div>
@@ -838,6 +884,71 @@ export default function App() {
           </Section>
 
           <Section number="6" title="Other Retirement Income" helper="Add plan payouts, annuities, and portfolio-income assumptions that support retirement spending.">
+            <div className="optional-planning-panel">
+              <ToggleRow
+                title="Include One-Time Financial Events"
+                description="Optional inflows or outflows such as an inheritance, property sale, wedding, or major purchase. Events occur once at the selected age."
+                checked={inputs.includeOneTimeEvents}
+                onChange={(checked) => updateInput("includeOneTimeEvents", checked)}
+              />
+              {inputs.includeOneTimeEvents ? (
+                <div className="custom-income-panel">
+                  <div className="custom-income-panel__header">
+                    <div>
+                      <h3>One-Time Financial Events</h3>
+                      <p>Use positive amounts. Choose whether each event adds to or takes away from available cash.</p>
+                    </div>
+                    <button className="secondary-action" type="button" onClick={addOneTimeEvent}>
+                      <Plus size={18} /> Add Event
+                    </button>
+                  </div>
+                  {inputs.oneTimeEvents.length === 0 ? (
+                    <div className="empty-state"><strong>No one-time events added.</strong><span>Add an event only when it is relevant to the plan.</span></div>
+                  ) : (
+                    <div className="custom-income-list">
+                      {inputs.oneTimeEvents.map((event, index) => (
+                        <article className="custom-income-card" key={event.id}>
+                          <div className="custom-income-card__top">
+                            <strong>Event {index + 1}</strong>
+                            <button className="icon-action danger" type="button" aria-label={`Remove event ${index + 1}`} onClick={() => removeOneTimeEvent(event.id)}><Trash2 size={17} /></button>
+                          </div>
+                          <div className="field-grid">
+                            <TextField label="Event Name" placeholder="e.g. Property sale or inheritance" value={event.label} onChange={(value) => updateOneTimeEvent(event.id, { label: value })} />
+                            <NumberField label="Event Age" value={event.age} onChange={(value) => updateOneTimeEvent(event.id, { age: value })} />
+                            <NumberField label="Amount" helper="Today's dollars; applied once." prefix="$" value={event.amount} onChange={(value) => updateOneTimeEvent(event.id, { amount: value })} />
+                            <SelectField<OneTimeEventDirection> label="Cash Flow Direction" value={event.direction} options={["inflow", "outflow"]} labels={{ inflow: "Adds to cash", outflow: "Uses cash" }} onChange={(value) => updateOneTimeEvent(event.id, { direction: value })} />
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              <ToggleRow
+                title="Enable SRS Planning"
+                description="Optional Singapore Supplementary Retirement Scheme projection. Contributions receive tax relief subject to the overall personal relief cap; withdrawals are modelled over ten years with 50% taxable for qualifying retirement withdrawals."
+                checked={inputs.includeSrs}
+                onChange={(checked) => updateInput("includeSrs", checked)}
+              />
+              {inputs.includeSrs ? (
+                <div className="custom-income-panel">
+                  <div className="custom-income-panel__header"><div><h3>SRS Planning</h3><p>Annual contributions and growth are shown separately from cash and investments. The withdrawal schedule is an annual approximation of the ten-year window.</p></div></div>
+                  <div className="field-grid">
+                    <NumberField label="Current SRS Balance" prefix="$" value={inputs.srsCurrentBalance} onChange={(value) => updateInput("srsCurrentBalance", value)} />
+                    <NumberField label="Annual SRS Contribution" helper="Contributions stop at retirement or the contribution end age." prefix="$" value={inputs.srsAnnualContribution} onChange={(value) => updateInput("srsAnnualContribution", value)} />
+                    <NumberField label="Contribution End Age" value={inputs.srsContributionEndAge} onChange={(value) => updateInput("srsContributionEndAge", value)} />
+                    <NumberField label="SRS Return Rate" suffix="%" step={0.1} value={inputs.srsReturnRate} onChange={(value) => updateInput("srsReturnRate", value)} />
+                    <NumberField label="First Penalty-Free Withdrawal Age" helper="Default 63. Use 62 only if your first SRS contribution was made under the earlier statutory retirement age." value={inputs.srsFirstWithdrawalAge} onChange={(value) => updateInput("srsFirstWithdrawalAge", value)} />
+                  </div>
+                  <div className="mini-metrics">
+                    <MetricCard label="Projected SRS Contributions" value={formatCurrency(projection.summary.totalSrsContributions)} note="Across the build-up years" tone="blue" />
+                    <MetricCard label="Projected SRS Withdrawals" value={formatCurrency(projection.summary.totalSrsWithdrawals)} note="Spread across up to ten years" tone="good" />
+                    <MetricCard label="SRS Balance At End" value={formatCurrency(projection.rows.at(-1)?.srsBalance ?? 0)} note="Remaining after modeled withdrawals" tone="neutral" />
+                  </div>
+                </div>
+              ) : null}
+            </div>
             <details className="assumption-details">
               <summary>Fine tune retirement income assumptions</summary>
               <div className="field-grid">
@@ -1051,7 +1162,8 @@ export default function App() {
                 { label: "CPF OA", className: "dot-cpf-oa" },
                 { label: "CPF SA", className: "dot-cpf-sa" },
                 { label: "CPF RA / LIFE", className: "dot-cpf-ra" },
-                { label: "CPF MA", className: "dot-cpf-ma" }
+                { label: "CPF MA", className: "dot-cpf-ma" },
+                { label: "SRS", className: "dot-custom-income" }
               ]}
             />
             <div className="chart-frame">
@@ -1068,6 +1180,7 @@ export default function App() {
                     <Area dataKey="cpfSa" name="CPF SA" type="monotone" stackId="wealth" stroke="var(--chart-cpf-sa)" fill="var(--chart-cpf-sa)" fillOpacity={0.62} />
                     <Area dataKey="cpfRa" name="CPF RA / LIFE Reserve" type="monotone" stackId="wealth" stroke="var(--chart-cpf-ra)" fill="var(--chart-cpf-ra)" fillOpacity={0.62} />
                     <Area dataKey="cpfMa" name="CPF MA" type="monotone" stackId="wealth" stroke="var(--chart-cpf-ma)" fill="var(--chart-cpf-ma)" fillOpacity={0.62} />
+                    <Area dataKey="srs" name="SRS" type="monotone" stackId="wealth" stroke="var(--chart-custom-income)" fill="var(--chart-custom-income)" fillOpacity={0.62} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -1086,6 +1199,7 @@ export default function App() {
                 { label: "CPF LIFE", className: "dot-primary" },
                 { label: "Dividends", className: "dot-success" },
                 { label: "Custom Income", className: "dot-custom-income" },
+                { label: "SRS Withdrawal", className: "dot-custom-income" },
                 { label: "Spending", className: "dot-error" },
                 { label: "Cash Drawdown", className: "dot-cash" },
                 { label: "Investment Drawdown", className: "dot-investments" },
@@ -1104,6 +1218,7 @@ export default function App() {
                     <Line dataKey="cpfLifeIncome" name="CPF LIFE Income" type="monotone" stroke="var(--chart-primary)" strokeWidth={3} dot={false} />
                     <Line dataKey="passiveIncome" name="Dividends / Passive Income" type="monotone" stroke="var(--chart-success)" strokeWidth={3} dot={false} />
                     <Line dataKey="customIncome" name="Custom Income" type="monotone" stroke="var(--chart-custom-income)" strokeWidth={3} dot={false} />
+                    <Line dataKey="srsIncome" name="SRS Withdrawal" type="monotone" stroke="var(--chart-custom-income)" strokeWidth={2.6} dot={false} strokeDasharray="5 4" />
                     <Line dataKey="spending" name="Spending Need" type="monotone" stroke="var(--chart-error)" strokeWidth={3} dot={false} />
                     <Line dataKey="cashWithdrawal" name="Cash Drawdown" type="monotone" stroke="var(--chart-cash)" strokeWidth={2.6} dot={false} />
                     <Line dataKey="investmentWithdrawal" name="Investment Drawdown" type="monotone" stroke="var(--chart-investments)" strokeWidth={2.6} dot={false} />
