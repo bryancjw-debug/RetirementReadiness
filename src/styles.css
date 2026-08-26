@@ -42,6 +42,7 @@
   --chart-cpf-ra: #5dbb84;
   --chart-cpf-ma: #d8a546;
   --chart-grid: rgba(102, 112, 133, 0.13);
+  --backdrop-opacity: 0.16;
 }
 
 :root[data-theme="dark"] {
@@ -83,6 +84,7 @@
   --chart-cpf-ra: #74d99f;
   --chart-cpf-ma: #e0b45c;
   --chart-grid: rgba(170, 180, 188, 0.13);
+  --backdrop-opacity: 0.11;
 }
 
 * {
@@ -98,11 +100,37 @@ body {
   min-width: 320px;
   min-height: 100vh;
   color: var(--text);
+  position: relative;
   background:
     radial-gradient(circle at top left, rgba(79, 155, 166, 0.16), transparent 28rem),
     radial-gradient(circle at 88% 8%, rgba(111, 168, 220, 0.14), transparent 26rem),
     radial-gradient(circle at 50% 110%, rgba(93, 187, 132, 0.08), transparent 34rem),
     linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 54%, var(--bg) 100%);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 32%, transparent) 0%, var(--bg) 96%),
+    url("./assets/singapore-waterfront-maltipoos.png") center / cover no-repeat;
+  opacity: var(--backdrop-opacity);
+  filter: saturate(0.86) contrast(0.95);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 14%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 24rem),
+    radial-gradient(circle at 82% 18%, color-mix(in srgb, var(--secondary) 12%, transparent), transparent 22rem);
+  opacity: 0.46;
 }
 
 :root[data-theme="dark"] body {
@@ -140,6 +168,8 @@ button:disabled {
   width: min(1440px, calc(100% - 32px));
   margin: 0 auto;
   padding: 24px 0 40px;
+  position: relative;
+  z-index: 1;
 }
 
 .hero,

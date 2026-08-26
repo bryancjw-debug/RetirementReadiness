@@ -674,14 +674,14 @@ export default function App() {
             </div>
           </Section>
 
-          <Section number="3" title="What You Have Today" helper="Enter the balances available for retirement. CPF MA is tracked, but not used for retirement drawdown.">
+          <Section number="3" title="What You Have Today" helper="Enter today's retirement assets, CPF balances, and CPF contributions if CPF LIFE is part of the plan. CPF MA is tracked, but not used for retirement drawdown.">
             <div className="field-grid">
               <NumberField label="Cash Savings" prefix="$" value={inputs.currentCashSavings} onChange={(value) => updateInput("currentCashSavings", value)} />
               <NumberField label="Investment Portfolio" prefix="$" value={inputs.currentInvestments} onChange={(value) => updateInput("currentInvestments", value)} />
             </div>
             <ToggleRow
               title="Include CPF Balances"
-              description="Recommended for Singapore users. CPF OA and SA may help fund gaps before true shortfall appears."
+              description="Recommended for Singapore users. This also unlocks CPF contributions from income, CPF housing usage, and CPF medical premium assumptions."
               checked={inputs.includeCpf}
               onChange={(checked) => updateInput("includeCpf", checked)}
             />
@@ -709,6 +709,67 @@ export default function App() {
                     onChange={(value) => updateInput("cpfMaMedicalPremiumAnnual", value)}
                   />
                 </div>
+                <div className="divider" />
+                <ToggleRow
+                  title="Include CPF Contributions From Income"
+                  description="Turn this on if you are employed or self-employed before retirement. This affects CPF balances and estimated CPF LIFE funding."
+                  checked={inputs.cpfWorkStatus !== "Not contributing"}
+                  onChange={(checked) => {
+                    updateInput("cpfWorkStatus", checked ? "Employed" : "Not contributing");
+                  }}
+                />
+                {inputs.cpfWorkStatus !== "Not contributing" ? (
+                  <>
+                    <div className="field-grid">
+                      <SelectField<CpfWorkStatus>
+                        label="Work Type"
+                        value={inputs.cpfWorkStatus}
+                        options={["Employed", "Self-employed", "Not contributing"]}
+                        onChange={(value) => updateInput("cpfWorkStatus", value)}
+                      />
+                      <NumberField label="Gross Monthly Income" prefix="$" value={inputs.grossMonthlyIncome} onChange={(value) => updateInput("grossMonthlyIncome", value)} />
+                      <SelectField<CpfResidencyStatus>
+                        label="CPF Residency"
+                        value={inputs.cpfResidency}
+                        options={["Singapore Citizen", "Permanent Resident"]}
+                        onChange={(value) => updateInput("cpfResidency", value)}
+                      />
+                      <NumberField label="Income Growth" suffix="%" step={0.1} value={inputs.incomeGrowthRate} onChange={(value) => updateInput("incomeGrowthRate", value)} />
+                    </div>
+                    {inputs.cpfResidency === "Permanent Resident" ? (
+                      <div className="field-grid">
+                        <SelectField<CpfPrYear>
+                          label="PR CPF Year"
+                          value={inputs.cpfPrYear}
+                          options={["First Year", "Second Year", "Third Year Or Later"]}
+                          onChange={(value) => updateInput("cpfPrYear", value)}
+                        />
+                        <SelectField<CpfPrRateType>
+                          label="PR Contribution Basis"
+                          value={inputs.cpfPrRateType}
+                          options={["Graduated Employer And Employee", "Full Employer And Graduated Employee", "Full Employer And Employee"]}
+                          onChange={(value) => updateInput("cpfPrRateType", value)}
+                        />
+                      </div>
+                    ) : null}
+                    {inputs.cpfWorkStatus === "Self-employed" ? (
+                      <NumberField
+                        label="Annual MediSave Override"
+                        helper="Optional. Leave as 0 to estimate mandatory self-employed MediSave."
+                        prefix="$"
+                        value={inputs.selfEmployedAnnualMedisaveOverride}
+                        onChange={(value) => updateInput("selfEmployedAnnualMedisaveOverride", value)}
+                      />
+                    ) : null}
+                    <div className="mini-metrics">
+                      <MetricCard label="Annual Income" value={formatCurrency(inputs.grossMonthlyIncome * 12)} note="Before CPF contribution" tone="blue" />
+                      <MetricCard label="Your CPF Portion" value={formatCurrency(cpfPreview.employee)} note={inputs.cpfWorkStatus === "Self-employed" ? "MediSave only" : "Employee contribution"} />
+                      <MetricCard label="Employer CPF" value={formatCurrency(cpfPreview.employer)} note={inputs.cpfWorkStatus === "Self-employed" ? "Not applicable" : "Estimated employer portion"} />
+                    </div>
+                  </>
+                ) : (
+                  <p className="helper-note">No active-income CPF will be added. Existing CPF balances and CPF LIFE can still be projected below.</p>
+                )}
               </>
             ) : null}
           </Section>
@@ -721,68 +782,6 @@ export default function App() {
               <NumberField label="Cash Savings Rate" suffix="%" step={0.1} value={inputs.cashInterestRate} onChange={(value) => updateInput("cashInterestRate", value)} />
               <NumberField label="Investment Return Before Retirement" suffix="%" step={0.1} value={inputs.preRetirementInvestmentReturnRate} onChange={(value) => updateInput("preRetirementInvestmentReturnRate", value)} />
             </div>
-            <div className="divider" />
-            <ToggleRow
-              title="Include CPF Contributions From Income"
-              description="Turn this on if you are employed or self-employed before retirement."
-              checked={inputs.includeCpf && inputs.cpfWorkStatus !== "Not contributing"}
-              onChange={(checked) => {
-                updateInput("includeCpf", true);
-                updateInput("cpfWorkStatus", checked ? "Employed" : "Not contributing");
-              }}
-            />
-            {inputs.includeCpf && inputs.cpfWorkStatus !== "Not contributing" ? (
-              <>
-                <div className="field-grid">
-                  <SelectField<CpfWorkStatus>
-                    label="Work Type"
-                    value={inputs.cpfWorkStatus}
-                    options={["Employed", "Self-employed", "Not contributing"]}
-                    onChange={(value) => updateInput("cpfWorkStatus", value)}
-                  />
-                  <NumberField label="Gross Monthly Income" prefix="$" value={inputs.grossMonthlyIncome} onChange={(value) => updateInput("grossMonthlyIncome", value)} />
-                  <SelectField<CpfResidencyStatus>
-                    label="CPF Residency"
-                    value={inputs.cpfResidency}
-                    options={["Singapore Citizen", "Permanent Resident"]}
-                    onChange={(value) => updateInput("cpfResidency", value)}
-                  />
-                  <NumberField label="Income Growth" suffix="%" step={0.1} value={inputs.incomeGrowthRate} onChange={(value) => updateInput("incomeGrowthRate", value)} />
-                </div>
-                {inputs.cpfResidency === "Permanent Resident" ? (
-                  <div className="field-grid">
-                    <SelectField<CpfPrYear>
-                      label="PR CPF Year"
-                      value={inputs.cpfPrYear}
-                      options={["First Year", "Second Year", "Third Year Or Later"]}
-                      onChange={(value) => updateInput("cpfPrYear", value)}
-                    />
-                    <SelectField<CpfPrRateType>
-                      label="PR Contribution Basis"
-                      value={inputs.cpfPrRateType}
-                      options={["Graduated Employer And Employee", "Full Employer And Graduated Employee", "Full Employer And Employee"]}
-                      onChange={(value) => updateInput("cpfPrRateType", value)}
-                    />
-                  </div>
-                ) : null}
-                {inputs.cpfWorkStatus === "Self-employed" ? (
-                  <NumberField
-                    label="Annual MediSave Override"
-                    helper="Optional. Leave as 0 to estimate mandatory self-employed MediSave."
-                    prefix="$"
-                    value={inputs.selfEmployedAnnualMedisaveOverride}
-                    onChange={(value) => updateInput("selfEmployedAnnualMedisaveOverride", value)}
-                  />
-                ) : null}
-                <div className="mini-metrics">
-                  <MetricCard label="Annual Income" value={formatCurrency(inputs.grossMonthlyIncome * 12)} note="Before CPF contribution" tone="blue" />
-                  <MetricCard label="Your CPF Portion" value={formatCurrency(cpfPreview.employee)} note={inputs.cpfWorkStatus === "Self-employed" ? "MediSave only" : "Employee contribution"} />
-                  <MetricCard label="Employer CPF" value={formatCurrency(cpfPreview.employer)} note={inputs.cpfWorkStatus === "Self-employed" ? "Not applicable" : "Estimated employer portion"} />
-                </div>
-              </>
-            ) : (
-              <p className="helper-note">No active-income CPF will be added. Existing CPF balances and CPF LIFE can still be projected below.</p>
-            )}
           </Section>
 
           <Section number="5" title="CPF LIFE Planning" helper="CPF LIFE begins at the selected start age. If you retire before 65, the app shows the gap before CPF LIFE starts.">
