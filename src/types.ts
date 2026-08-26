@@ -2,7 +2,7 @@ export type SavingsFrequency = "monthly" | "yearly";
 
 export type RetirementIncomeMethod = "passive" | "fixed" | "dynamic";
 
-export type RetirementLifestylePreset = "Essential" | "Comfortable" | "Flexible" | "Custom";
+export type RetirementLifestylePreset = "Essential" | "Comfortable" | "Luxurious" | "Custom";
 
 export type CustomIncomeFrequency = "monthly" | "yearly";
 

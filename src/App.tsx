@@ -39,8 +39,8 @@ const lifestylePresets: Array<{
   {
     id: "Essential",
     label: "Essential",
-    monthlyAmount: 2_000,
-    note: "A lean baseline for food, transport, utilities, basic leisure, and a small health buffer.",
+    monthlyAmount: 2_500,
+    note: "A practical baseline for food, transport, utilities, basic leisure, and a built-in health buffer.",
     breakdown: [
       { label: "Daily living", share: 45 },
       { label: "Housing and utilities", share: 20 },
@@ -52,7 +52,7 @@ const lifestylePresets: Array<{
   {
     id: "Comfortable",
     label: "Comfortable",
-    monthlyAmount: 3_000,
+    monthlyAmount: 3_500,
     note: "A balanced target for regular dining, hobbies, family support, medical buffer, and local leisure.",
     breakdown: [
       { label: "Daily living", share: 36 },
@@ -63,10 +63,10 @@ const lifestylePresets: Array<{
     ]
   },
   {
-    id: "Flexible",
-    label: "Flexible",
-    monthlyAmount: 5_000,
-    note: "A wider lifestyle allowance for travel, family giving, higher healthcare buffer, and more discretionary choices.",
+    id: "Luxurious",
+    label: "Luxurious",
+    monthlyAmount: 8_000,
+    note: "A generous lifestyle allowance for travel, family giving, premium experiences, and wider discretionary choices.",
     breakdown: [
       { label: "Daily living", share: 28 },
       { label: "Housing and utilities", share: 16 },
@@ -437,12 +437,7 @@ export default function App() {
     monthlyRetirementSpendingToday * Math.pow(1 + inputs.retirementSpendingInflationRate / 100, yearsUntilRetirement);
   const cpfLifeBridgeYears = Math.max(0, inputs.cpfLifeStartAge - inputs.retirementAge);
   const selectedLifestylePreset = lifestylePresets.find((preset) => preset.id === inputs.retirementLifestylePreset);
-  const projectedMonthlyHealthcare =
-    inputs.includeHealthcareCosts
-      ? annualToMonthly(inputs.healthcareCostAnnualToday)
-        * Math.pow(1 + inputs.healthcareInflationRate / 100, yearsUntilRetirement)
-      : 0;
-  const projectedMonthlyGoalAtRetirement = projectedMonthlyRetirementSpending + projectedMonthlyHealthcare;
+  const projectedMonthlyGoalAtRetirement = projectedMonthlyRetirementSpending;
   const drawdownTotals = projection.rows.reduce(
     (totals, row) => {
       if (row.phase !== "retirement") return totals;
@@ -622,48 +617,17 @@ export default function App() {
               />
               <NumberField label="Inflation" suffix="%" step={0.1} value={inputs.retirementSpendingInflationRate} onChange={(value) => updateInput("retirementSpendingInflationRate", value)} />
             </div>
-            <ToggleRow
-              title="Add Healthcare Costs Separately"
-              description="Optional. Use this for extra healthcare allowance not already included in the lifestyle target."
-              checked={inputs.includeHealthcareCosts}
-              onChange={(checked) => updateInput("includeHealthcareCosts", checked)}
-            />
-            {inputs.includeHealthcareCosts ? (
-              <div className="field-grid">
-                <NumberField
-                  label="Healthcare Cost Today"
-                  helper="Annual amount in today's dollars."
-                  prefix="$"
-                  value={inputs.healthcareCostAnnualToday}
-                  onChange={(value) => updateInput("healthcareCostAnnualToday", value)}
-                />
-                <NumberField
-                  label="Healthcare Inflation"
-                  helper="Healthcare costs may rise faster than general spending."
-                  suffix="%"
-                  step={0.1}
-                  value={inputs.healthcareInflationRate}
-                  onChange={(value) => updateInput("healthcareInflationRate", value)}
-                />
-              </div>
-            ) : null}
             <div className="reality-check" aria-label="Retirement spending preview">
               <div className="reality-check__copy">
                 <p className="eyebrow">Retirement Reality Check</p>
                 <h3>{formatCurrency(projectedMonthlyGoalAtRetirement)} per month at age {inputs.retirementAge}</h3>
                 <p>
-                  This uses today's spending, inflation, and any separate healthcare allowance to show the future monthly target.
+                  This uses today's spending and your inflation assumption to show the future monthly target.
                 </p>
               </div>
               <div className="reality-check__metrics">
                 <MetricCard label="Today's Monthly Spending" value={formatCurrency(monthlyRetirementSpendingToday)} note="Entered in today's dollars" tone="blue" />
                 <MetricCard label="Projected At Retirement" value={formatCurrency(projectedMonthlyRetirementSpending)} note={`After ${yearsUntilRetirement} years of inflation`} tone="good" />
-                <MetricCard
-                  label="Healthcare Add-On"
-                  value={inputs.includeHealthcareCosts ? formatCurrency(projectedMonthlyHealthcare) : "Not included"}
-                  note={inputs.includeHealthcareCosts ? `Projected using ${formatPercent(inputs.healthcareInflationRate)} healthcare inflation` : "Toggle on if you want a separate buffer"}
-                  tone={inputs.includeHealthcareCosts ? "warn" : "neutral"}
-                />
                 <MetricCard
                   label="CPF LIFE Bridge"
                   value={cpfLifeBridgeYears > 0 ? `${cpfLifeBridgeYears} years` : "No bridge gap"}
@@ -774,7 +738,7 @@ export default function App() {
             ) : null}
           </Section>
 
-          <Section number="4" title="What You Can Still Add" helper="Use monthly amounts. The app annualises them and stops them from your retirement age.">
+          <Section number="4" title="Building Towards Tomorrow" helper="Use monthly amounts. The app annualises them and stops them from your retirement age.">
             <div className="field-grid">
               <NumberField label="Monthly Cash Savings" prefix="$" value={inputs.cashSavingsContribution} onChange={(value) => updateInput("cashSavingsContribution", value)} />
               <NumberField label="Monthly Investment Amount" prefix="$" value={inputs.investmentContribution} onChange={(value) => updateInput("investmentContribution", value)} />
@@ -788,9 +752,9 @@ export default function App() {
             {inputs.includeCpf ? (
               <>
                 <div className="mini-metrics">
-                  <MetricCard label="Projected CPF At 55" value={formatCurrency(projection.summary.projectedCpfRetirementFundingAt55)} note={projection.summary.cpfRetirementSumTierAt55} tone={projection.summary.cpfRetirementSumShortfallAt55 > 0 ? "warn" : "good"} />
                   <MetricCard label="CPF OA At 55" value={formatCurrency(projection.summary.projectedCpfOaAt55)} note="Remaining OA after housing and RA transfer" tone="blue" />
                   <MetricCard label="CPF RA At 55" value={formatCurrency(projection.summary.projectedCpfRaAt55)} note="Amount supporting CPF LIFE payouts" tone="good" />
+                  <MetricCard label="CPF MA At 55" value={formatCurrency(projection.summary.projectedCpfMaAt55)} note="Healthcare account; not used for retirement drawdown" tone="blue" />
                   <MetricCard label="Selected Target" value={formatCurrency(projection.summary.cpfRetirementSumAt55)} note={`${inputs.cpfRetirementSum} retirement sum`} tone="blue" />
                   <MetricCard label="CPF LIFE / Month" value={formatCurrency(projection.summary.cpfLifeMonthlyAtStart)} note={`Starts at age ${inputs.cpfLifeStartAge}`} tone="good" />
                 </div>
@@ -995,6 +959,9 @@ export default function App() {
             <h2>{projection.summary.status === "ready" ? "Ready through the projection age" : "More funding is needed"}</h2>
             <p>
               Retirement need funded: {formatCurrency(projection.summary.totalFundedRetirementNeed)} of {formatCurrency(projection.summary.totalRetirementNeed)}.
+            </p>
+            <p className="result-subline">
+              Expected monthly spending at age {inputs.retirementAge}: <strong>{formatCurrency(projectedMonthlyRetirementSpending)}</strong>
             </p>
           </div>
           <div className="results-header__badge">

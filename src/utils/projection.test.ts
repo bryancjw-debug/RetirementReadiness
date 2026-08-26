@@ -652,7 +652,7 @@ describe("projectRetirement", () => {
     expect(projection.summary.cpfRetirementSumTierAt55).toBe("Below BRS");
   });
 
-  it("adds optional healthcare costs to retirement spending only when toggled on", () => {
+  it("ignores legacy healthcare add-ons because lifestyle presets include the health buffer", () => {
     const baseInputs = {
       ...defaultInputs,
       currentAge: 60,
@@ -671,11 +671,11 @@ describe("projectRetirement", () => {
     };
 
     const withoutHealthcare = projectRetirement({ ...baseInputs, includeHealthcareCosts: false });
-    const withHealthcare = projectRetirement({ ...baseInputs, includeHealthcareCosts: true });
+    const withLegacyHealthcare = projectRetirement({ ...baseInputs, includeHealthcareCosts: true });
 
     expect(withoutHealthcare.rows.find((row) => row.age === 65)?.healthcareCost).toBe(0);
-    expect(withHealthcare.rows.find((row) => row.age === 65)?.healthcareCost).toBe(6_000);
-    expect(withHealthcare.summary.totalRetirementNeed).toBeGreaterThan(withoutHealthcare.summary.totalRetirementNeed);
-    expect(withHealthcare.summary.totalHealthcareCosts).toBe(6_000);
+    expect(withLegacyHealthcare.rows.find((row) => row.age === 65)?.healthcareCost).toBe(0);
+    expect(withLegacyHealthcare.summary.totalRetirementNeed).toBe(withoutHealthcare.summary.totalRetirementNeed);
+    expect(withLegacyHealthcare.summary.totalHealthcareCosts).toBe(0);
   });
 });

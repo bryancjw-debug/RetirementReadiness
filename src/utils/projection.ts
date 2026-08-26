@@ -396,16 +396,18 @@ export function sanitizeInputs(inputs: RetirementInputs): RetirementInputs {
     cpfMaMedicalPremiumAnnual: clampNonNegative(inputs.cpfMaMedicalPremiumAnnual),
     cpfOaToRaTransferAt55: clampNonNegative(inputs.cpfOaToRaTransferAt55),
     cpfLifeMonthlyOverride: clampNonNegative(inputs.cpfLifeMonthlyOverride),
-    retirementLifestylePreset: inputs.retirementLifestylePreset ?? "Custom",
+    retirementLifestylePreset: (inputs.retirementLifestylePreset as string) === "Flexible"
+      ? "Luxurious"
+      : inputs.retirementLifestylePreset ?? "Custom",
     retirementSpendingAnnual: clampNonNegative(inputs.retirementSpendingAnnual),
     retirementSpendingInflationRate: Number.isFinite(inputs.retirementSpendingInflationRate)
       ? inputs.retirementSpendingInflationRate
       : 0,
-    includeHealthcareCosts: Boolean(inputs.includeHealthcareCosts),
-    healthcareCostAnnualToday: clampNonNegative(inputs.healthcareCostAnnualToday),
-    healthcareInflationRate: Number.isFinite(inputs.healthcareInflationRate)
-      ? inputs.healthcareInflationRate
-      : 0,
+    // Healthcare is already represented inside the lifestyle presets. Keep the
+    // legacy fields for saved-profile compatibility, but do not add them again.
+    includeHealthcareCosts: false,
+    healthcareCostAnnualToday: 0,
+    healthcareInflationRate: 0,
     fixedWithdrawalAnnual: clampNonNegative(inputs.fixedWithdrawalAnnual),
     dynamicWithdrawalRate: clampNonNegative(inputs.dynamicWithdrawalRate),
     customIncomeStreams: sanitizeCustomIncomeStreams(inputs, currentAge, endAge)
@@ -426,9 +428,11 @@ function calculateSpendingNeed(inputs: RetirementInputs, age: number): number {
 }
 
 function calculateHealthcareCost(inputs: RetirementInputs, age: number): number {
-  if (!inputs.includeHealthcareCosts || age < inputs.retirementAge) return 0;
-  const yearsFromStart = age - inputs.currentAge;
-  return inputs.healthcareCostAnnualToday * Math.pow(1 + percentToRate(inputs.healthcareInflationRate), yearsFromStart);
+  // Healthcare allowance is built into each lifestyle preset. This function
+  // remains as a compatibility seam for older saved profiles.
+  void inputs;
+  void age;
+  return 0;
 }
 
 function calculateCustomIncome(inputs: RetirementInputs, age: number): number {
