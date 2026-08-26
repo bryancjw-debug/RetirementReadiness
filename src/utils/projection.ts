@@ -55,8 +55,12 @@ export const defaultInputs: RetirementInputs = {
   cpfRetirementSum: "Full",
   cpfLifePlan: "Standard",
   cpfLifeMonthlyOverride: 0,
+  retirementLifestylePreset: "Comfortable",
   retirementSpendingAnnual: 36_000,
   retirementSpendingInflationRate: 2.5,
+  includeHealthcareCosts: false,
+  healthcareCostAnnualToday: 2_400,
+  healthcareInflationRate: 4,
   retirementIncomeMethod: "passive",
   fixedWithdrawalAnnual: 60_000,
   dynamicWithdrawalRate: 4,
@@ -392,9 +396,15 @@ export function sanitizeInputs(inputs: RetirementInputs): RetirementInputs {
     cpfMaMedicalPremiumAnnual: clampNonNegative(inputs.cpfMaMedicalPremiumAnnual),
     cpfOaToRaTransferAt55: clampNonNegative(inputs.cpfOaToRaTransferAt55),
     cpfLifeMonthlyOverride: clampNonNegative(inputs.cpfLifeMonthlyOverride),
+    retirementLifestylePreset: inputs.retirementLifestylePreset ?? "Custom",
     retirementSpendingAnnual: clampNonNegative(inputs.retirementSpendingAnnual),
     retirementSpendingInflationRate: Number.isFinite(inputs.retirementSpendingInflationRate)
       ? inputs.retirementSpendingInflationRate
+      : 0,
+    includeHealthcareCosts: Boolean(inputs.includeHealthcareCosts),
+    healthcareCostAnnualToday: clampNonNegative(inputs.healthcareCostAnnualToday),
+    healthcareInflationRate: Number.isFinite(inputs.healthcareInflationRate)
+      ? inputs.healthcareInflationRate
       : 0,
     fixedWithdrawalAnnual: clampNonNegative(inputs.fixedWithdrawalAnnual),
     dynamicWithdrawalRate: clampNonNegative(inputs.dynamicWithdrawalRate),
@@ -413,6 +423,12 @@ function calculateSpendingNeed(inputs: RetirementInputs, age: number): number {
   if (age < inputs.retirementAge) return 0;
   const yearsFromStart = age - inputs.currentAge;
   return inputs.retirementSpendingAnnual * Math.pow(1 + percentToRate(inputs.retirementSpendingInflationRate), yearsFromStart);
+}
+
+function calculateHealthcareCost(inputs: RetirementInputs, age: number): number {
+  if (!inputs.includeHealthcareCosts || age < inputs.retirementAge) return 0;
+  const yearsFromStart = age - inputs.currentAge;
+  return inputs.healthcareCostAnnualToday * Math.pow(1 + percentToRate(inputs.healthcareInflationRate), yearsFromStart);
 }
 
 function calculateCustomIncome(inputs: RetirementInputs, age: number): number {
@@ -636,7 +652,8 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       : 0;
     const customIncomeGenerated = phase === "retirement" ? calculateCustomIncome(inputs, age) : 0;
     const retirementIncome = passiveIncomeGenerated + cpfLifeIncome + customIncomeGenerated;
-    const spendingNeed = calculateSpendingNeed(inputs, age);
+    const healthcareCost = calculateHealthcareCost(inputs, age);
+    const spendingNeed = calculateSpendingNeed(inputs, age) + healthcareCost;
     const desiredWithdrawal = phase === "retirement"
       ? calculateWithdrawal(inputs, investableOpeningBalance, retirementIncome, spendingNeed, age)
       : 0;
@@ -712,6 +729,7 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       passiveIncomeGenerated,
       cpfLifeIncome,
       customIncomeGenerated,
+      healthcareCost,
       spendingNeed,
       cashWithdrawal,
       investmentWithdrawal,
@@ -749,6 +767,7 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
   const totalPassiveIncome = rows.reduce((sum, row) => sum + row.passiveIncomeGenerated, 0);
   const totalCpfLifeIncome = rows.reduce((sum, row) => sum + row.cpfLifeIncome, 0);
   const totalCustomIncome = rows.reduce((sum, row) => sum + row.customIncomeGenerated, 0);
+  const totalHealthcareCosts = rows.reduce((sum, row) => sum + row.healthcareCost, 0);
   const totalShortfall = rows.reduce((sum, row) => sum + row.shortfall, 0);
   const totalRetirementNeed = rows.reduce((sum, row) => sum + row.spendingNeed, 0);
   const totalFundedRetirementNeed = Math.max(0, totalRetirementNeed - totalShortfall);
@@ -776,6 +795,15 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
   const projectedCpfMaAt55 = inputs.includeCpf ? (cpfFundingRowAt55?.cpfMa ?? 0) : 0;
   const projectedCpfRetirementFundingAt55 = inputs.includeCpf
     ? projectedCpfRaAt55
+    : 0;
+  const availableOaTransferToRaAt55 = inputs.includeCpf
+    ? Math.min(
+      projectedCpfOaAt55,
+      Math.max(0, cpfRetirementSumsAt55.ers - projectedCpfRaAt55)
+    )
+    : 0;
+  const estimatedCpfWithdrawableAt55 = inputs.includeCpf
+    ? Math.max(0, projectedCpfOaAt55 + Math.max(0, projectedCpfRaAt55 - cpfTargetForChoice(inputs.cpfRetirementSum, cpfRetirementSumYear)))
     : 0;
   const cpfRetirementSumShortfallAt55 = inputs.includeCpf
     ? Math.max(0, cpfTargetForChoice(inputs.cpfRetirementSum, cpfRetirementSumYear) - projectedCpfRetirementFundingAt55)
@@ -819,6 +847,7 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     totalPassiveIncome,
     totalCpfLifeIncome,
     totalCustomIncome,
+    totalHealthcareCosts,
     totalShortfall,
     incomeCoverageAtRetirement,
     cpfLifeMonthlyAtStart: (cpfLifeStartRow?.cpfLifeIncome ?? 0) / 12,
@@ -830,6 +859,8 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     projectedCpfOaAt55,
     projectedCpfRaAt55,
     projectedCpfMaAt55,
+    availableOaTransferToRaAt55,
+    estimatedCpfWithdrawableAt55,
     cpfRetirementSumShortfallAt55,
     cpfRetirementSumExcessAt55,
     cpfRetirementSumTierAt55

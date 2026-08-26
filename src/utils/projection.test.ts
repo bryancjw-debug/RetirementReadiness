@@ -651,4 +651,31 @@ describe("projectRetirement", () => {
     expect(projection.summary.projectedCpfRetirementFundingAt55).toBeLessThan(projection.summary.cpfBasicRetirementSumAt55);
     expect(projection.summary.cpfRetirementSumTierAt55).toBe("Below BRS");
   });
+
+  it("adds optional healthcare costs to retirement spending only when toggled on", () => {
+    const baseInputs = {
+      ...defaultInputs,
+      currentAge: 60,
+      retirementAge: 65,
+      endAge: 65,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      includeCpf: false,
+      retirementSpendingAnnual: 36_000,
+      retirementSpendingInflationRate: 0,
+      healthcareCostAnnualToday: 6_000,
+      healthcareInflationRate: 0,
+      passiveIncomeYieldRate: 0
+    };
+
+    const withoutHealthcare = projectRetirement({ ...baseInputs, includeHealthcareCosts: false });
+    const withHealthcare = projectRetirement({ ...baseInputs, includeHealthcareCosts: true });
+
+    expect(withoutHealthcare.rows.find((row) => row.age === 65)?.healthcareCost).toBe(0);
+    expect(withHealthcare.rows.find((row) => row.age === 65)?.healthcareCost).toBe(6_000);
+    expect(withHealthcare.summary.totalRetirementNeed).toBeGreaterThan(withoutHealthcare.summary.totalRetirementNeed);
+    expect(withHealthcare.summary.totalHealthcareCosts).toBe(6_000);
+  });
 });

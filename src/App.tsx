@@ -24,9 +24,58 @@ import type {
   CustomIncomeStream,
   RetirementIncomeMethod,
   RetirementInputs,
+  RetirementLifestylePreset,
   RetirementSumChoice,
   RetirementYear
 } from "./types";
+
+const lifestylePresets: Array<{
+  id: Exclude<RetirementLifestylePreset, "Custom">;
+  label: string;
+  monthlyAmount: number;
+  note: string;
+  breakdown: Array<{ label: string; share: number }>;
+}> = [
+  {
+    id: "Essential",
+    label: "Essential",
+    monthlyAmount: 2_000,
+    note: "A lean baseline for food, transport, utilities, basic leisure, and a small health buffer.",
+    breakdown: [
+      { label: "Daily living", share: 45 },
+      { label: "Housing and utilities", share: 20 },
+      { label: "Transport", share: 12 },
+      { label: "Healthcare buffer", share: 13 },
+      { label: "Leisure and family", share: 10 }
+    ]
+  },
+  {
+    id: "Comfortable",
+    label: "Comfortable",
+    monthlyAmount: 3_000,
+    note: "A balanced target for regular dining, hobbies, family support, medical buffer, and local leisure.",
+    breakdown: [
+      { label: "Daily living", share: 36 },
+      { label: "Housing and utilities", share: 18 },
+      { label: "Transport", share: 12 },
+      { label: "Healthcare buffer", share: 16 },
+      { label: "Leisure and family", share: 18 }
+    ]
+  },
+  {
+    id: "Flexible",
+    label: "Flexible",
+    monthlyAmount: 5_000,
+    note: "A wider lifestyle allowance for travel, family giving, higher healthcare buffer, and more discretionary choices.",
+    breakdown: [
+      { label: "Daily living", share: 28 },
+      { label: "Housing and utilities", share: 16 },
+      { label: "Transport", share: 12 },
+      { label: "Healthcare buffer", share: 18 },
+      { label: "Travel and lifestyle", share: 26 }
+    ]
+  }
+];
 
 function numberValue(value: number) {
   return Number.isFinite(value) ? String(value) : "";
@@ -293,8 +342,12 @@ function YearTable({ rows }: { rows: RetirementYear[] }) {
             <th>CPF LIFE</th>
             <th>Dividends</th>
             <th>Custom Income</th>
+            <th>Healthcare Costs</th>
             <th>Spending</th>
-            <th>Drawdown</th>
+            <th>Cash Drawdown</th>
+            <th>Investment Drawdown</th>
+            <th>CPF SA Drawdown</th>
+            <th>CPF OA Drawdown</th>
             <th>Shortfall</th>
             <th>Total Wealth</th>
           </tr>
@@ -316,8 +369,12 @@ function YearTable({ rows }: { rows: RetirementYear[] }) {
               <td>{formatCurrency(row.cpfLifeIncome)}</td>
               <td>{formatCurrency(row.passiveIncomeGenerated)}</td>
               <td>{formatCurrency(row.customIncomeGenerated)}</td>
+              <td>{formatCurrency(row.healthcareCost)}</td>
               <td>{formatCurrency(row.spendingNeed)}</td>
-              <td>{formatCurrency(row.withdrawal)}</td>
+              <td>{formatCurrency(row.cashWithdrawal)}</td>
+              <td>{formatCurrency(row.investmentWithdrawal)}</td>
+              <td>{formatCurrency(row.cpfSaDrawdown)}</td>
+              <td>{formatCurrency(row.cpfOaDrawdown)}</td>
               <td>{formatCurrency(row.shortfall)}</td>
               <td>{formatCurrency(row.endingBalance)}</td>
             </tr>
@@ -378,11 +435,30 @@ export default function App() {
   const yearsUntilRetirement = Math.max(0, inputs.retirementAge - inputs.currentAge);
   const projectedMonthlyRetirementSpending =
     monthlyRetirementSpendingToday * Math.pow(1 + inputs.retirementSpendingInflationRate / 100, yearsUntilRetirement);
-  const retirementSpendingIncrease =
-    monthlyRetirementSpendingToday > 0
-      ? ((projectedMonthlyRetirementSpending / monthlyRetirementSpendingToday) - 1) * 100
-      : 0;
   const cpfLifeBridgeYears = Math.max(0, inputs.cpfLifeStartAge - inputs.retirementAge);
+  const selectedLifestylePreset = lifestylePresets.find((preset) => preset.id === inputs.retirementLifestylePreset);
+  const projectedMonthlyHealthcare =
+    inputs.includeHealthcareCosts
+      ? annualToMonthly(inputs.healthcareCostAnnualToday)
+        * Math.pow(1 + inputs.healthcareInflationRate / 100, yearsUntilRetirement)
+      : 0;
+  const projectedMonthlyGoalAtRetirement = projectedMonthlyRetirementSpending + projectedMonthlyHealthcare;
+  const drawdownTotals = projection.rows.reduce(
+    (totals, row) => {
+      if (row.phase !== "retirement") return totals;
+      totals.retirementIncome += row.cpfLifeIncome + row.passiveIncomeGenerated + row.customIncomeGenerated;
+      totals.cash += row.cashWithdrawal;
+      totals.investments += row.investmentWithdrawal;
+      totals.cpf += row.cpfDrawdown;
+      totals.shortfall += row.shortfall;
+      return totals;
+    },
+    { retirementIncome: 0, cash: 0, investments: 0, cpf: 0, shortfall: 0 }
+  );
+  const drawdownWaterfallTotal = Math.max(
+    1,
+    drawdownTotals.retirementIncome + drawdownTotals.cash + drawdownTotals.investments + drawdownTotals.cpf + drawdownTotals.shortfall
+  );
 
   const chartRows = projection.rows.map((row) => ({
     age: row.age,
@@ -396,9 +472,12 @@ export default function App() {
     cpfLifeIncome: Math.round(row.cpfLifeIncome),
     passiveIncome: Math.round(row.passiveIncomeGenerated),
     customIncome: Math.round(row.customIncomeGenerated),
+    healthcareCost: Math.round(row.healthcareCost),
     income: Math.round(row.passiveIncomeGenerated + row.cpfLifeIncome + row.customIncomeGenerated),
     spending: Math.round(row.spendingNeed),
-    drawdown: Math.round(row.withdrawal),
+    cashWithdrawal: Math.round(row.cashWithdrawal),
+    investmentWithdrawal: Math.round(row.investmentWithdrawal),
+    cpfDrawdown: Math.round(row.cpfDrawdown),
     shortfall: Math.round(row.shortfall)
   }));
 
@@ -493,22 +572,98 @@ export default function App() {
           </Section>
 
           <Section number="2" title="Your Retirement Goal" helper="Start with the spending target. This immediately shows how inflation changes the number by retirement age.">
+            <div className="lifestyle-grid" aria-label="Retirement lifestyle presets">
+              {lifestylePresets.map((preset) => (
+                <button
+                  className={`lifestyle-card ${inputs.retirementLifestylePreset === preset.id ? "is-selected" : ""}`}
+                  type="button"
+                  key={preset.id}
+                  onClick={() => {
+                    updateInput("retirementLifestylePreset", preset.id);
+                    updateInput("retirementSpendingAnnual", monthlyToAnnual(preset.monthlyAmount));
+                  }}
+                >
+                  <span>{preset.label}</span>
+                  <strong>{formatCurrency(preset.monthlyAmount)} / month</strong>
+                  <small>Today's SGD</small>
+                </button>
+              ))}
+            </div>
+            <div className="lifestyle-breakdown">
+              <div>
+                <p className="eyebrow">Lifestyle Preset</p>
+                <h3>{selectedLifestylePreset?.label ?? "Custom"} spending target</h3>
+                <p>
+                  {selectedLifestylePreset?.note ?? "Use your own monthly number if the preset does not match the client's retirement lifestyle."}
+                </p>
+              </div>
+              {selectedLifestylePreset ? (
+                <div className="lifestyle-bars" aria-label={`${selectedLifestylePreset.label} spending breakdown`}>
+                  {selectedLifestylePreset.breakdown.map((item) => (
+                    <div key={item.label}>
+                      <span>{item.label}</span>
+                      <i><b style={{ width: `${item.share}%` }} /></i>
+                      <strong>{item.share}%</strong>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <div className="field-grid">
-              <NumberField label="Monthly Retirement Spending" prefix="$" value={monthlyRetirementSpendingToday} onChange={(value) => updateInput("retirementSpendingAnnual", monthlyToAnnual(value))} />
+              <NumberField
+                label="Monthly Retirement Spending"
+                helper="Today's SGD. The app projects it to retirement age using inflation."
+                prefix="$"
+                value={monthlyRetirementSpendingToday}
+                onChange={(value) => {
+                  updateInput("retirementLifestylePreset", "Custom");
+                  updateInput("retirementSpendingAnnual", monthlyToAnnual(value));
+                }}
+              />
               <NumberField label="Inflation" suffix="%" step={0.1} value={inputs.retirementSpendingInflationRate} onChange={(value) => updateInput("retirementSpendingInflationRate", value)} />
             </div>
+            <ToggleRow
+              title="Add Healthcare Costs Separately"
+              description="Optional. Use this for extra healthcare allowance not already included in the lifestyle target."
+              checked={inputs.includeHealthcareCosts}
+              onChange={(checked) => updateInput("includeHealthcareCosts", checked)}
+            />
+            {inputs.includeHealthcareCosts ? (
+              <div className="field-grid">
+                <NumberField
+                  label="Healthcare Cost Today"
+                  helper="Annual amount in today's dollars."
+                  prefix="$"
+                  value={inputs.healthcareCostAnnualToday}
+                  onChange={(value) => updateInput("healthcareCostAnnualToday", value)}
+                />
+                <NumberField
+                  label="Healthcare Inflation"
+                  helper="Healthcare costs may rise faster than general spending."
+                  suffix="%"
+                  step={0.1}
+                  value={inputs.healthcareInflationRate}
+                  onChange={(value) => updateInput("healthcareInflationRate", value)}
+                />
+              </div>
+            ) : null}
             <div className="reality-check" aria-label="Retirement spending preview">
               <div className="reality-check__copy">
                 <p className="eyebrow">Retirement Reality Check</p>
-                <h3>{formatCurrency(projectedMonthlyRetirementSpending)} per month at age {inputs.retirementAge}</h3>
+                <h3>{formatCurrency(projectedMonthlyGoalAtRetirement)} per month at age {inputs.retirementAge}</h3>
                 <p>
-                  This uses today's spending and compounds it at {formatPercent(inputs.retirementSpendingInflationRate)} per year until retirement.
+                  This uses today's spending, inflation, and any separate healthcare allowance to show the future monthly target.
                 </p>
               </div>
               <div className="reality-check__metrics">
                 <MetricCard label="Today's Monthly Spending" value={formatCurrency(monthlyRetirementSpendingToday)} note="Entered in today's dollars" tone="blue" />
                 <MetricCard label="Projected At Retirement" value={formatCurrency(projectedMonthlyRetirementSpending)} note={`After ${yearsUntilRetirement} years of inflation`} tone="good" />
-                <MetricCard label="Inflation Increase" value={formatPercent(retirementSpendingIncrease)} note="Increase from today's monthly amount" tone="warn" />
+                <MetricCard
+                  label="Healthcare Add-On"
+                  value={inputs.includeHealthcareCosts ? formatCurrency(projectedMonthlyHealthcare) : "Not included"}
+                  note={inputs.includeHealthcareCosts ? `Projected using ${formatPercent(inputs.healthcareInflationRate)} healthcare inflation` : "Toggle on if you want a separate buffer"}
+                  tone={inputs.includeHealthcareCosts ? "warn" : "neutral"}
+                />
                 <MetricCard
                   label="CPF LIFE Bridge"
                   value={cpfLifeBridgeYears > 0 ? `${cpfLifeBridgeYears} years` : "No bridge gap"}
@@ -664,6 +819,31 @@ export default function App() {
                     </strong>
                   </div>
                 </div>
+                <article className="cpf-readiness-card">
+                  <div>
+                    <p className="eyebrow">CPF Readiness Result</p>
+                    <h3>{projection.summary.cpfRetirementSumTierAt55}</h3>
+                    <p>
+                      At age 55, CPF RA is formed using SA first, then OA. This estimate shows how much more OA
+                      could still be transferred to RA, and the remaining CPF amount that may be available outside
+                      the selected RA target.
+                    </p>
+                  </div>
+                  <div className="cpf-readiness-card__metrics">
+                    <MetricCard
+                      label="OA Transfer Room"
+                      value={formatCurrency(projection.summary.availableOaTransferToRaAt55)}
+                      note="Estimated room up to ERS"
+                      tone="blue"
+                    />
+                    <MetricCard
+                      label="Estimated CPF Withdrawable"
+                      value={formatCurrency(projection.summary.estimatedCpfWithdrawableAt55)}
+                      note="Approximation; CPF withdrawal rules depend on eligibility and property pledge"
+                      tone="good"
+                    />
+                  </div>
+                </article>
                 <div className="field-grid">
                   <NumberField label="CPF LIFE Start Age" value={inputs.cpfLifeStartAge} onChange={(value) => updateInput("cpfLifeStartAge", value)} />
                   <NumberField
@@ -862,6 +1042,34 @@ export default function App() {
           </div>
         </section>
 
+        <section className="drawdown-card" aria-labelledby="drawdown-title">
+          <div className="drawdown-card__copy">
+            <p className="eyebrow">Retirement Drawdown Strategy</p>
+            <h3 id="drawdown-title">How spending is funded each year.</h3>
+            <p>
+              The model uses retirement income first. If income is not enough, it draws from cash, investments,
+              CPF SA/OA, and only then records an unfunded shortfall.
+            </p>
+          </div>
+          <div className="drawdown-waterfall" aria-label="Retirement funding waterfall">
+            {[
+              { label: "Retirement income", value: drawdownTotals.retirementIncome, className: "waterfall-income" },
+              { label: "Cash holdings", value: drawdownTotals.cash, className: "waterfall-cash" },
+              { label: "Investment holdings", value: drawdownTotals.investments, className: "waterfall-investments" },
+              { label: "CPF OA/SA", value: drawdownTotals.cpf, className: "waterfall-cpf" },
+              { label: "Unfunded shortfall", value: drawdownTotals.shortfall, className: "waterfall-shortfall" }
+            ].map((item, index) => (
+              <article className={`waterfall-step ${item.className}`} key={item.label}>
+                <span>{index + 1}. {item.label}</span>
+                <strong>{formatCurrency(item.value)}</strong>
+                <i aria-hidden="true">
+                  <b style={{ width: `${Math.max(4, (item.value / drawdownWaterfallTotal) * 100)}%` }} />
+                </i>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <div className="chart-grid">
           <article className="chart-card">
             <div className="chart-card__header">
@@ -904,7 +1112,7 @@ export default function App() {
             <div className="chart-card__header">
               <div>
                 <h3>Retirement Cash Flow</h3>
-                <p>Separates CPF LIFE, dividends, spending, and the drawdown needed when income is not enough.</p>
+                <p>Separates retirement income, spending, and the drawdown sources used when income is not enough.</p>
               </div>
             </div>
             <ChartLegend
@@ -913,7 +1121,10 @@ export default function App() {
                 { label: "Dividends", className: "dot-success" },
                 { label: "Custom Income", className: "dot-custom-income" },
                 { label: "Spending", className: "dot-error" },
-                { label: "Drawdown", className: "dot-warning" }
+                { label: "Cash Drawdown", className: "dot-cash" },
+                { label: "Investment Drawdown", className: "dot-investments" },
+                { label: "CPF Drawdown", className: "dot-cpf-oa" },
+                { label: "Shortfall", className: "dot-warning" }
               ]}
             />
             <div className="chart-frame">
@@ -928,7 +1139,10 @@ export default function App() {
                     <Line dataKey="passiveIncome" name="Dividends / Passive Income" type="monotone" stroke="var(--chart-success)" strokeWidth={3} dot={false} />
                     <Line dataKey="customIncome" name="Custom Income" type="monotone" stroke="var(--chart-custom-income)" strokeWidth={3} dot={false} />
                     <Line dataKey="spending" name="Spending Need" type="monotone" stroke="var(--chart-error)" strokeWidth={3} dot={false} />
-                    <Line dataKey="drawdown" name="Drawdown Used" type="monotone" stroke="var(--chart-warning)" strokeWidth={3} dot={false} />
+                    <Line dataKey="cashWithdrawal" name="Cash Drawdown" type="monotone" stroke="var(--chart-cash)" strokeWidth={2.6} dot={false} />
+                    <Line dataKey="investmentWithdrawal" name="Investment Drawdown" type="monotone" stroke="var(--chart-investments)" strokeWidth={2.6} dot={false} />
+                    <Line dataKey="cpfDrawdown" name="CPF OA/SA Drawdown" type="monotone" stroke="var(--chart-cpf-oa)" strokeWidth={2.6} dot={false} />
+                    <Line dataKey="shortfall" name="Unfunded Shortfall" type="monotone" stroke="var(--chart-warning)" strokeWidth={2.6} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -956,10 +1170,16 @@ export default function App() {
             <strong>{formatCurrency(projection.summary.totalPassiveIncome)}</strong>
             <span>Total Custom Income</span>
             <strong>{formatCurrency(projection.summary.totalCustomIncome)}</strong>
+            <span>Total Healthcare Add-On</span>
+            <strong>{formatCurrency(projection.summary.totalHealthcareCosts)}</strong>
             <span>Total Drawdown Used</span>
             <strong>{formatCurrency(projection.summary.totalWithdrawn)}</strong>
             <span>Total CPF SA/OA Drawdown</span>
             <strong>{formatCurrency(projection.summary.totalCpfDrawdown)}</strong>
+            <span>Estimated OA Transfer Room At 55</span>
+            <strong>{formatCurrency(projection.summary.availableOaTransferToRaAt55)}</strong>
+            <span>Estimated CPF Withdrawable At 55</span>
+            <strong>{formatCurrency(projection.summary.estimatedCpfWithdrawableAt55)}</strong>
           </div>
         </section>
 

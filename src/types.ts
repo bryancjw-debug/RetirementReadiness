@@ -2,6 +2,8 @@ export type SavingsFrequency = "monthly" | "yearly";
 
 export type RetirementIncomeMethod = "passive" | "fixed" | "dynamic";
 
+export type RetirementLifestylePreset = "Essential" | "Comfortable" | "Flexible" | "Custom";
+
 export type CustomIncomeFrequency = "monthly" | "yearly";
 
 export type CustomIncomeGrowthMode = "fixed" | "increasing";
@@ -65,8 +67,12 @@ export interface RetirementInputs {
   cpfRetirementSum: RetirementSumChoice;
   cpfLifePlan: CpfLifePlan;
   cpfLifeMonthlyOverride: number;
+  retirementLifestylePreset: RetirementLifestylePreset;
   retirementSpendingAnnual: number;
   retirementSpendingInflationRate: number;
+  includeHealthcareCosts: boolean;
+  healthcareCostAnnualToday: number;
+  healthcareInflationRate: number;
   retirementIncomeMethod: RetirementIncomeMethod;
   fixedWithdrawalAnnual: number;
   dynamicWithdrawalRate: number;
@@ -99,6 +105,7 @@ export interface RetirementYear {
   passiveIncomeGenerated: number;
   cpfLifeIncome: number;
   customIncomeGenerated: number;
+  healthcareCost: number;
   spendingNeed: number;
   cashWithdrawal: number;
   investmentWithdrawal: number;
@@ -144,6 +151,7 @@ export interface RetirementSummary {
   totalPassiveIncome: number;
   totalCpfLifeIncome: number;
   totalCustomIncome: number;
+  totalHealthcareCosts: number;
   totalShortfall: number;
   incomeCoverageAtRetirement: number;
   cpfLifeMonthlyAtStart: number;
@@ -155,6 +163,8 @@ export interface RetirementSummary {
   projectedCpfOaAt55: number;
   projectedCpfRaAt55: number;
   projectedCpfMaAt55: number;
+  availableOaTransferToRaAt55: number;
+  estimatedCpfWithdrawableAt55: number;
   cpfRetirementSumShortfallAt55: number;
   cpfRetirementSumExcessAt55: number;
   cpfRetirementSumTierAt55: "Below BRS" | "BRS Met" | "FRS Met" | "ERS Met";

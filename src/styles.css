@@ -829,6 +829,232 @@ footer span {
   gap: 12px;
 }
 
+.lifestyle-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.lifestyle-card {
+  display: grid;
+  gap: 8px;
+  min-height: 148px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  color: var(--text);
+  background: var(--surface-elevated);
+  text-align: left;
+  box-shadow: var(--inner-glow);
+  transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.lifestyle-card:hover,
+.lifestyle-card.is-selected {
+  border-color: var(--line-strong);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--primary) 10%, transparent), transparent 58%),
+    var(--surface-elevated);
+  transform: translateY(-1px);
+}
+
+.lifestyle-card.is-selected {
+  box-shadow: 0 0 0 4px var(--focus), var(--inner-glow);
+}
+
+.lifestyle-card span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.lifestyle-card strong {
+  color: var(--blue);
+  font-size: clamp(1.45rem, 2.2vw, 2rem);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+}
+
+.lifestyle-card small {
+  color: var(--muted);
+}
+
+.lifestyle-breakdown {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--surface-soft) 86%, transparent);
+}
+
+.lifestyle-breakdown h3,
+.lifestyle-breakdown p {
+  margin-bottom: 0;
+}
+
+.lifestyle-breakdown p:not(.eyebrow) {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.lifestyle-bars {
+  display: grid;
+  gap: 11px;
+}
+
+.lifestyle-bars div {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.8fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.lifestyle-bars span,
+.lifestyle-bars strong {
+  font-size: 0.9rem;
+}
+
+.lifestyle-bars span {
+  color: var(--muted);
+}
+
+.lifestyle-bars strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.lifestyle-bars i {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line) 74%, transparent);
+}
+
+.lifestyle-bars b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), var(--green));
+}
+
+.cpf-readiness-card,
+.drawdown-card {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--primary) 8%, transparent), transparent 48%),
+    var(--surface-elevated);
+  box-shadow: var(--inner-glow);
+}
+
+.cpf-readiness-card {
+  grid-template-columns: minmax(240px, 1fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+.cpf-readiness-card h3,
+.cpf-readiness-card p,
+.drawdown-card h3,
+.drawdown-card p {
+  margin-bottom: 0;
+}
+
+.cpf-readiness-card p:not(.eyebrow),
+.drawdown-card p:not(.eyebrow) {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.cpf-readiness-card__metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.drawdown-card {
+  grid-template-columns: minmax(240px, 0.72fr) minmax(0, 1.5fr);
+  margin-bottom: 18px;
+  padding: clamp(20px, 3vw, 28px);
+}
+
+.drawdown-card__copy {
+  display: grid;
+  align-content: center;
+}
+
+.drawdown-waterfall {
+  display: grid;
+  gap: 10px;
+}
+
+.waterfall-step {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface-soft) 78%, transparent);
+}
+
+.waterfall-step span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.waterfall-step strong {
+  color: var(--text);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.waterfall-step i {
+  grid-column: 1 / -1;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line) 70%, transparent);
+}
+
+.waterfall-step b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.waterfall-income b {
+  background: var(--chart-primary);
+}
+
+.waterfall-cash b {
+  background: var(--chart-cash);
+}
+
+.waterfall-investments b {
+  background: var(--chart-investments);
+}
+
+.waterfall-cpf b {
+  background: var(--chart-cpf-oa);
+}
+
+.waterfall-shortfall b {
+  background: var(--chart-error);
+}
+
 .custom-income-panel {
   display: grid;
   gap: 16px;
@@ -1280,6 +1506,8 @@ footer svg {
   .chart-grid,
   .metric-grid,
   .cpf-outlook,
+  .cpf-readiness-card,
+  .drawdown-card,
   .gap-card,
   .gap-options {
     grid-template-columns: 1fr;
@@ -1353,8 +1581,15 @@ footer svg {
 
   .field-grid,
   .mini-metrics,
+  .lifestyle-grid,
+  .lifestyle-breakdown,
+  .cpf-readiness-card__metrics,
   .reality-check__metrics {
     grid-template-columns: 1fr;
+  }
+
+  .lifestyle-bars div {
+    grid-template-columns: minmax(92px, 0.9fr) minmax(0, 1fr) auto;
   }
 
   .section-card__header {
