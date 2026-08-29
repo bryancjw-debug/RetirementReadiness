@@ -22,6 +22,12 @@ export type CpfPrYear = "First Year" | "Second Year" | "Third Year Or Later";
 
 export type CpfPrRateType = "Graduated Employer And Employee" | "Full Employer And Graduated Employee" | "Full Employer And Employee";
 
+export type SrsResidencyStatus = "Singapore Citizen Or Permanent Resident" | "Foreigner";
+
+export type SrsFirstContributionPeriod = "Before 1 July 2022" | "1 July 2022 To 30 June 2026" | "From 1 July 2026" | "Not Sure";
+
+export type SrsWithdrawalStrategy = "Tax Aware" | "Even Over Ten Years";
+
 export interface CustomIncomeStream {
   id: string;
   label: string;
@@ -90,6 +96,9 @@ export interface RetirementInputs {
   includeOneTimeEvents: boolean;
   oneTimeEvents: OneTimeFinancialEvent[];
   includeSrs: boolean;
+  srsResidency: SrsResidencyStatus;
+  srsFirstContributionPeriod: SrsFirstContributionPeriod;
+  srsWithdrawalStrategy: SrsWithdrawalStrategy;
   srsCurrentBalance: number;
   srsAnnualContribution: number;
   srsContributionEndAge: number;
@@ -128,6 +137,10 @@ export interface RetirementYear {
   srsContribution: number;
   srsGrowth: number;
   srsWithdrawal: number;
+  srsTaxableAmount: number;
+  srsEstimatedTax: number;
+  srsNetWithdrawal: number;
+  srsTransferToCash: number;
   srsBalance: number;
   healthcareCost: number;
   spendingNeed: number;
@@ -178,6 +191,8 @@ export interface RetirementSummary {
   totalSrsContributions: number;
   totalSrsGrowth: number;
   totalSrsWithdrawals: number;
+  totalSrsEstimatedTax: number;
+  totalSrsNetWithdrawals: number;
   totalHealthcareCosts: number;
   totalShortfall: number;
   incomeCoverageAtRetirement: number;

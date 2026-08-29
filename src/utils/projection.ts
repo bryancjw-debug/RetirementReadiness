@@ -15,6 +15,8 @@ import type {
 
 const CURRENT_POLICY_YEAR = 2026;
 const CPF_ANNUAL_CAP_2026 = 37_740;
+const SRS_LOCAL_ANNUAL_CAP = 15_300;
+const SRS_FOREIGNER_ANNUAL_CAP = 35_700;
 
 const clampNonNegative = (value: number) => Math.max(0, Number.isFinite(value) ? value : 0);
 
@@ -69,12 +71,63 @@ export const defaultInputs: RetirementInputs = {
   includeOneTimeEvents: false,
   oneTimeEvents: [],
   includeSrs: false,
+  srsResidency: "Singapore Citizen Or Permanent Resident",
+  srsFirstContributionPeriod: "Not Sure",
+  srsWithdrawalStrategy: "Tax Aware",
   srsCurrentBalance: 0,
   srsAnnualContribution: 0,
   srsContributionEndAge: 65,
   srsReturnRate: 2.5,
   srsFirstWithdrawalAge: 63
 };
+
+export function srsContributionCap(inputs: Pick<RetirementInputs, "srsResidency">) {
+  return inputs.srsResidency === "Foreigner" ? SRS_FOREIGNER_ANNUAL_CAP : SRS_LOCAL_ANNUAL_CAP;
+}
+
+export function srsPrescribedRetirementAge(inputs: Pick<RetirementInputs, "srsFirstContributionPeriod">) {
+  if (inputs.srsFirstContributionPeriod === "Before 1 July 2022") return 62;
+  if (inputs.srsFirstContributionPeriod === "1 July 2022 To 30 June 2026") return 63;
+  return 64;
+}
+
+function residentIncomeTax(chargeableIncome: number) {
+  const brackets = [
+    { width: 20_000, rate: 0 },
+    { width: 10_000, rate: 0.02 },
+    { width: 10_000, rate: 0.035 },
+    { width: 40_000, rate: 0.07 },
+    { width: 40_000, rate: 0.115 },
+    { width: 40_000, rate: 0.15 },
+    { width: 40_000, rate: 0.18 },
+    { width: 40_000, rate: 0.19 },
+    { width: 40_000, rate: 0.195 },
+    { width: 40_000, rate: 0.20 },
+    { width: 180_000, rate: 0.22 },
+    { width: 500_000, rate: 0.23 },
+    { width: Number.POSITIVE_INFINITY, rate: 0.24 }
+  ];
+  let remaining = clampNonNegative(chargeableIncome);
+  let tax = 0;
+  for (const bracket of brackets) {
+    const taxableInBracket = Math.min(remaining, bracket.width);
+    tax += taxableInBracket * bracket.rate;
+    remaining -= taxableInBracket;
+    if (remaining <= 0) break;
+  }
+  return tax;
+}
+
+export function estimateSrsWithdrawalTax(
+  grossWithdrawal: number,
+  residency: RetirementInputs["srsResidency"]
+) {
+  const taxableAmount = clampNonNegative(grossWithdrawal) * 0.5;
+  const estimatedTax = residency === "Foreigner"
+    ? taxableAmount * 0.24
+    : residentIncomeTax(taxableAmount);
+  return { taxableAmount, estimatedTax };
+}
 
 export function frsForYear(year: number) {
   const known: Record<number, number> = { 2025: 213_000, 2026: 220_400, 2027: 228_200 };
@@ -433,11 +486,20 @@ export function sanitizeInputs(inputs: RetirementInputs): RetirementInputs {
     includeOneTimeEvents: Boolean(inputs.includeOneTimeEvents),
     oneTimeEvents: sanitizeOneTimeEvents(inputs, currentAge, endAge),
     includeSrs: Boolean(inputs.includeSrs),
+    srsResidency: inputs.srsResidency ?? "Singapore Citizen Or Permanent Resident",
+    srsFirstContributionPeriod: inputs.srsFirstContributionPeriod ?? "Not Sure",
+    srsWithdrawalStrategy: inputs.srsWithdrawalStrategy ?? "Tax Aware",
     srsCurrentBalance: clampNonNegative(inputs.srsCurrentBalance),
-    srsAnnualContribution: clampNonNegative(inputs.srsAnnualContribution),
+    srsAnnualContribution: Math.min(clampNonNegative(inputs.srsAnnualContribution), srsContributionCap(inputs)),
     srsContributionEndAge: Math.min(endAge, Math.max(currentAge, Math.floor(clampNonNegative(inputs.srsContributionEndAge)))),
     srsReturnRate: Number.isFinite(inputs.srsReturnRate) ? inputs.srsReturnRate : 0,
-    srsFirstWithdrawalAge: Math.min(endAge, Math.max(62, Math.floor(clampNonNegative(inputs.srsFirstWithdrawalAge))))
+    srsFirstWithdrawalAge: Math.min(
+      endAge,
+      Math.max(
+        srsPrescribedRetirementAge(inputs),
+        Math.floor(clampNonNegative(inputs.srsFirstWithdrawalAge))
+      )
+    )
   };
 }
 
@@ -666,9 +728,20 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     let srsWithdrawal = 0;
     if (inputs.includeSrs && age >= inputs.srsFirstWithdrawalAge && age < inputs.srsFirstWithdrawalAge + 10) {
       if (srsWithdrawalBase <= 0) srsWithdrawalBase = srsBalance;
-      srsWithdrawal = Math.min(srsBalance, srsWithdrawalBase / 10);
+      const withdrawalYear = age - inputs.srsFirstWithdrawalAge + 1;
+      const yearsRemaining = 11 - withdrawalYear;
+      srsWithdrawal = withdrawalYear === 10
+        ? srsBalance
+        : inputs.srsWithdrawalStrategy === "Tax Aware"
+          ? Math.min(srsBalance, srsBalance / yearsRemaining)
+          : Math.min(srsBalance, srsWithdrawalBase / 10);
       srsBalance -= srsWithdrawal;
     }
+    const { taxableAmount: srsTaxableAmount, estimatedTax: srsEstimatedTax } = estimateSrsWithdrawalTax(
+      srsWithdrawal,
+      inputs.srsResidency
+    );
+    const srsNetWithdrawal = Math.max(0, srsWithdrawal - srsEstimatedTax);
     const cpfContribution = inputs.includeCpf ? cpfContributionForYear(inputs, age) : { oa: 0, sa: 0, ma: 0, ra: 0, total: 0, employee: 0, employer: 0 };
     cpf.oa += cpfContribution.oa;
     cpf.ma += cpfContribution.ma;
@@ -696,10 +769,7 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     const cashContribution = calculateAnnualContribution(inputs, age, inputs.cashSavingsContribution);
     const investmentContribution = calculateAnnualContribution(inputs, age, inputs.investmentContribution);
     const lumpSum = inputs.includeLumpSum && age === inputs.lumpSumAge ? inputs.lumpSumAmount : 0;
-    const cashBeforeGrowth = openingCashSavings + cashContribution + eventTotals.inflow
-      + (phase === "build-up" ? srsWithdrawal : 0);
     const investmentsBeforeGrowth = openingInvestments + investmentContribution + lumpSum;
-    const savingsInterest = cashBeforeGrowth * percentToRate(inputs.cashInterestRate);
     const investmentReturnRate = phase === "build-up"
       ? inputs.preRetirementInvestmentReturnRate
       : inputs.retirementReturnRate;
@@ -708,11 +778,20 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       ? investmentsBeforeGrowth * percentToRate(inputs.passiveIncomeYieldRate)
       : 0;
     const customIncomeGenerated = phase === "retirement" ? calculateCustomIncome(inputs, age) : 0;
-    const retirementIncome = phase === "retirement"
-      ? passiveIncomeGenerated + cpfLifeIncome + customIncomeGenerated + srsWithdrawal
-      : 0;
     const healthcareCost = calculateHealthcareCost(inputs, age);
     const spendingNeed = calculateSpendingNeed(inputs, age) + healthcareCost;
+    const retirementIncomeBeforeSrs = phase === "retirement"
+      ? passiveIncomeGenerated + cpfLifeIncome + customIncomeGenerated
+      : 0;
+    const srsIncomeUsed = phase === "retirement"
+      ? Math.min(srsNetWithdrawal, Math.max(spendingNeed + eventTotals.outflow - retirementIncomeBeforeSrs, 0))
+      : 0;
+    const srsTransferToCash = Math.max(srsNetWithdrawal - srsIncomeUsed, 0);
+    const cashBeforeGrowth = openingCashSavings + cashContribution + eventTotals.inflow + srsTransferToCash;
+    const savingsInterest = cashBeforeGrowth * percentToRate(inputs.cashInterestRate);
+    const retirementIncome = phase === "retirement"
+      ? retirementIncomeBeforeSrs + srsIncomeUsed
+      : 0;
     const desiredWithdrawal = phase === "retirement"
       ? Math.max(0, calculateWithdrawal(inputs, investableOpeningBalance, retirementIncome, spendingNeed + eventTotals.outflow, age))
       : eventTotals.outflow;
@@ -793,6 +872,10 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       srsContribution,
       srsGrowth,
       srsWithdrawal,
+      srsTaxableAmount,
+      srsEstimatedTax,
+      srsNetWithdrawal,
+      srsTransferToCash,
       srsBalance,
       healthcareCost,
       spendingNeed,
@@ -835,6 +918,8 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
   const totalSrsContributions = rows.reduce((sum, row) => sum + row.srsContribution, 0);
   const totalSrsGrowth = rows.reduce((sum, row) => sum + row.srsGrowth, 0);
   const totalSrsWithdrawals = rows.reduce((sum, row) => sum + row.srsWithdrawal, 0);
+  const totalSrsEstimatedTax = rows.reduce((sum, row) => sum + row.srsEstimatedTax, 0);
+  const totalSrsNetWithdrawals = rows.reduce((sum, row) => sum + row.srsNetWithdrawal, 0);
   const totalHealthcareCosts = rows.reduce((sum, row) => sum + row.healthcareCost, 0);
   const totalShortfall = rows.reduce((sum, row) => sum + row.shortfall, 0);
   const totalRetirementNeed = rows.reduce((sum, row) => sum + row.spendingNeed, 0);
@@ -848,7 +933,8 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
   const retirementRow = rows.find((row) => row.age === inputs.retirementAge);
   const retirementIncomeAtStart = (retirementRow?.passiveIncomeGenerated ?? 0)
     + (retirementRow?.cpfLifeIncome ?? 0)
-    + (retirementRow?.customIncomeGenerated ?? 0);
+    + (retirementRow?.customIncomeGenerated ?? 0)
+    + (retirementRow?.srsNetWithdrawal ?? 0);
   const incomeCoverageAtRetirement = retirementRow && retirementRow.spendingNeed > 0
     ? Math.min(100, (retirementIncomeAtStart + retirementRow.withdrawal) / retirementRow.spendingNeed * 100)
     : 100;
@@ -918,6 +1004,8 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     totalSrsContributions,
     totalSrsGrowth,
     totalSrsWithdrawals,
+    totalSrsEstimatedTax,
+    totalSrsNetWithdrawals,
     totalHealthcareCosts,
     totalShortfall,
     incomeCoverageAtRetirement,

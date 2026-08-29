@@ -262,6 +262,128 @@ describe("projectRetirement", () => {
     expect(projection.rows.at(-1)?.srsBalance).toBe(0);
   });
 
+  it("deems the remaining SRS balance withdrawn in year ten and transfers unused funds to cash", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 65,
+      retirementAge: 65,
+      endAge: 74,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      cashInterestRate: 0,
+      retirementSpendingAnnual: 0,
+      includeCpf: false,
+      includeSrs: true,
+      srsCurrentBalance: 100_000,
+      srsAnnualContribution: 0,
+      srsContributionEndAge: 65,
+      srsReturnRate: 5,
+      srsWithdrawalStrategy: "Even Over Ten Years",
+      srsFirstWithdrawalAge: 65
+    });
+
+    const finalRow = projection.rows.find((row) => row.age === 74);
+    expect(finalRow?.srsBalance).toBe(0);
+    expect(finalRow?.srsWithdrawal).toBeGreaterThan(10_500);
+    expect(finalRow?.srsTransferToCash).toBe(finalRow?.srsNetWithdrawal);
+    expect(finalRow?.endingCashSavings).toBeCloseTo(projection.summary.totalSrsNetWithdrawals, 6);
+  });
+
+  it("caps annual SRS contributions according to residency", () => {
+    const local = projectRetirement({
+      ...defaultInputs,
+      currentAge: 60,
+      retirementAge: 65,
+      endAge: 60,
+      includeCpf: false,
+      includeSrs: true,
+      srsResidency: "Singapore Citizen Or Permanent Resident",
+      srsAnnualContribution: 50_000
+    });
+    const foreigner = projectRetirement({
+      ...defaultInputs,
+      currentAge: 60,
+      retirementAge: 65,
+      endAge: 60,
+      includeCpf: false,
+      includeSrs: true,
+      srsResidency: "Foreigner",
+      srsAnnualContribution: 50_000
+    });
+
+    expect(local.rows[0].srsContribution).toBe(15_300);
+    expect(foreigner.rows[0].srsContribution).toBe(35_700);
+  });
+
+  it("estimates resident tax only when half of the qualifying SRS withdrawal exceeds the zero-rate band", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 65,
+      retirementAge: 65,
+      endAge: 65,
+      retirementSpendingAnnual: 0,
+      cashInterestRate: 0,
+      includeCpf: false,
+      includeSrs: true,
+      srsResidency: "Singapore Citizen Or Permanent Resident",
+      srsCurrentBalance: 500_000,
+      srsReturnRate: 0,
+      srsFirstWithdrawalAge: 65,
+      srsWithdrawalStrategy: "Tax Aware"
+    });
+
+    const firstWithdrawal = projection.rows[0];
+    expect(firstWithdrawal.srsWithdrawal).toBe(50_000);
+    expect(firstWithdrawal.srsTaxableAmount).toBe(25_000);
+    expect(firstWithdrawal.srsEstimatedTax).toBe(100);
+    expect(firstWithdrawal.srsNetWithdrawal).toBe(49_900);
+  });
+
+  it("shows foreigner withholding separately from the net SRS withdrawal", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 65,
+      retirementAge: 65,
+      endAge: 65,
+      retirementSpendingAnnual: 0,
+      cashInterestRate: 0,
+      includeCpf: false,
+      includeSrs: true,
+      srsResidency: "Foreigner",
+      srsCurrentBalance: 400_000,
+      srsReturnRate: 0,
+      srsFirstWithdrawalAge: 65,
+      srsWithdrawalStrategy: "Tax Aware"
+    });
+
+    const firstWithdrawal = projection.rows[0];
+    expect(firstWithdrawal.srsWithdrawal).toBe(40_000);
+    expect(firstWithdrawal.srsTaxableAmount).toBe(20_000);
+    expect(firstWithdrawal.srsEstimatedTax).toBe(4_800);
+    expect(firstWithdrawal.srsNetWithdrawal).toBe(35_200);
+  });
+
+  it("uses the statutory retirement age tied to the first SRS contribution period", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 62,
+      retirementAge: 62,
+      endAge: 64,
+      retirementSpendingAnnual: 0,
+      includeCpf: false,
+      includeSrs: true,
+      srsCurrentBalance: 100_000,
+      srsReturnRate: 0,
+      srsFirstContributionPeriod: "Not Sure",
+      srsFirstWithdrawalAge: 62
+    });
+
+    expect(projection.rows.find((row) => row.age === 62)?.srsWithdrawal).toBe(0);
+    expect(projection.rows.find((row) => row.age === 64)?.srsWithdrawal).toBeGreaterThan(0);
+  });
+
   it("forms CPF RA at age 55 and estimates CPF LIFE income from the selected sum", () => {
     const projection = projectRetirement({
       ...defaultInputs,

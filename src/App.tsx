@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Area,
   AreaChart,
@@ -10,8 +10,16 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import { BadgeCheck, Calculator, CircleAlert, Moon, Plus, RotateCcw, ShieldCheck, Sun, Trash2 } from "lucide-react";
-import { cpfContributionForYear, defaultInputs, projectRetirement } from "./utils/projection";
+import { BadgeCheck, Calculator, CircleAlert, CircleHelp, Moon, Plus, RotateCcw, ShieldCheck, Sun, Trash2 } from "lucide-react";
+import { YearTable as ResponsiveYearTable } from "./components/YearTable";
+import { ReadinessPanel as CollapsibleReadinessPanel } from "./components/ReadinessPanel";
+import {
+  cpfContributionForYear,
+  defaultInputs,
+  projectRetirement,
+  srsContributionCap,
+  srsPrescribedRetirementAge
+} from "./utils/projection";
 import { formatCurrency, formatNumber, formatPercent } from "./utils/formatters";
 import type {
   CpfLifePlan,
@@ -28,7 +36,9 @@ import type {
   RetirementInputs,
   RetirementLifestylePreset,
   RetirementSumChoice,
-  RetirementYear
+  SrsFirstContributionPeriod,
+  SrsResidencyStatus,
+  SrsWithdrawalStrategy
 } from "./types";
 
 const lifestylePresets: Array<{
@@ -209,6 +219,14 @@ function ToggleRow({
   );
 }
 
+function InfoTip({ text }: { text: string }) {
+  return (
+    <button className="info-tip" type="button" aria-label={text} data-tooltip={text}>
+      <CircleHelp size={17} />
+    </button>
+  );
+}
+
 function Section({
   number,
   title,
@@ -334,112 +352,6 @@ function createOneTimeEvent(inputs: RetirementInputs): OneTimeFinancialEvent {
   };
 }
 
-function YearTable({ rows }: { rows: RetirementYear[] }) {
-  return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Age</th>
-            <th>Phase</th>
-            <th>Cash</th>
-            <th>Investments</th>
-            <th>CPF OA</th>
-            <th>CPF SA</th>
-            <th>CPF MA</th>
-            <th>CPF RA</th>
-            <th>CPF LIFE Reserve</th>
-            <th>SRS Balance</th>
-            <th>OA Housing Use</th>
-            <th>MA Premiums</th>
-            <th>CPF LIFE</th>
-            <th>Dividends</th>
-            <th>Custom Income</th>
-            <th>SRS Withdrawal</th>
-            <th>Healthcare Costs</th>
-            <th>Spending</th>
-            <th>Cash Drawdown</th>
-            <th>Investment Drawdown</th>
-            <th>CPF SA Drawdown</th>
-            <th>CPF OA Drawdown</th>
-            <th>Shortfall</th>
-            <th>Total Wealth</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.age} className={row.shortfall > 0 ? "has-shortfall" : ""}>
-              <td>{row.age}</td>
-              <td>{row.phase === "build-up" ? "Build-up" : "Retirement"}</td>
-              <td>{formatCurrency(row.endingCashSavings)}</td>
-              <td>{formatCurrency(row.endingInvestments)}</td>
-              <td>{formatCurrency(row.cpfOa)}</td>
-              <td>{formatCurrency(row.cpfSa)}</td>
-              <td>{formatCurrency(row.cpfMa)}</td>
-              <td>{formatCurrency(row.cpfRa)}</td>
-              <td>{formatCurrency(row.cpfLifeReserve)}</td>
-              <td>{formatCurrency(row.srsBalance)}</td>
-              <td>{formatCurrency(row.cpfOaHousingUsage)}</td>
-              <td>{formatCurrency(row.cpfMaMedicalPremium)}</td>
-              <td>{formatCurrency(row.cpfLifeIncome)}</td>
-              <td>{formatCurrency(row.passiveIncomeGenerated)}</td>
-              <td>{formatCurrency(row.customIncomeGenerated)}</td>
-              <td>{formatCurrency(row.srsWithdrawal)}</td>
-              <td>{formatCurrency(row.healthcareCost)}</td>
-              <td>{formatCurrency(row.spendingNeed)}</td>
-              <td>{formatCurrency(row.cashWithdrawal)}</td>
-              <td>{formatCurrency(row.investmentWithdrawal)}</td>
-              <td>{formatCurrency(row.cpfSaDrawdown)}</td>
-              <td>{formatCurrency(row.cpfOaDrawdown)}</td>
-              <td>{formatCurrency(row.shortfall)}</td>
-              <td>{formatCurrency(row.endingBalance)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function ReadinessPanel({ projection, inputs }: { projection: ReturnType<typeof projectRetirement>; inputs: RetirementInputs }) {
-  const ready = projection.summary.status === "ready";
-  return (
-    <aside className={`readiness-panel ${ready ? "is-ready" : "needs-work"}`}>
-      <div className="readiness-gauge" style={{ "--score": `${projection.summary.readinessPercent}%` } as CSSProperties}>
-        <div>
-          <strong>{Math.round(projection.summary.readinessPercent)}%</strong>
-          <span>Ready</span>
-        </div>
-      </div>
-      <div className="readiness-panel__copy">
-        <p className="eyebrow">RetirementReadiness</p>
-        <h2>{ready ? "You look retirement ready." : "There is a projected gap."}</h2>
-        <p>{projection.summary.headline}</p>
-      </div>
-      <div className="readiness-panel__stats">
-        <div>
-          <span>Shortfall</span>
-          <strong className={projection.summary.totalShortfall > 0 ? "negative" : "positive"}>
-            {formatCurrency(projection.summary.totalShortfall)}
-          </strong>
-        </div>
-        <div>
-          <span>Invest More Monthly</span>
-          <strong>{formatCurrency(projection.summary.extraMonthlyInvestmentRequired)}</strong>
-        </div>
-        <div>
-          <span>Funds Last Until</span>
-          <strong>Age {projection.summary.runwayAge}</strong>
-        </div>
-        <div>
-          <span>CPF LIFE Starts</span>
-          <strong>Age {inputs.cpfLifeStartAge}</strong>
-        </div>
-      </div>
-    </aside>
-  );
-}
-
 export default function App() {
   const [inputs, setInputs] = useState<RetirementInputs>(defaultInputs);
   const [showTable, setShowTable] = useState(false);
@@ -457,7 +369,7 @@ export default function App() {
   const drawdownTotals = projection.rows.reduce(
     (totals, row) => {
       if (row.phase !== "retirement") return totals;
-      totals.retirementIncome += row.cpfLifeIncome + row.passiveIncomeGenerated + row.customIncomeGenerated + row.srsWithdrawal;
+      totals.retirementIncome += row.cpfLifeIncome + row.passiveIncomeGenerated + row.customIncomeGenerated + row.srsNetWithdrawal;
       totals.cash += row.cashWithdrawal;
       totals.investments += row.investmentWithdrawal;
       totals.cpf += row.cpfDrawdown;
@@ -484,9 +396,9 @@ export default function App() {
     cpfLifeIncome: Math.round(row.cpfLifeIncome),
     passiveIncome: Math.round(row.passiveIncomeGenerated),
     customIncome: Math.round(row.customIncomeGenerated),
-    srsIncome: Math.round(row.srsWithdrawal),
+    srsIncome: Math.round(row.srsNetWithdrawal),
     healthcareCost: Math.round(row.healthcareCost),
-    income: Math.round(row.passiveIncomeGenerated + row.cpfLifeIncome + row.customIncomeGenerated + row.srsWithdrawal),
+    income: Math.round(row.passiveIncomeGenerated + row.cpfLifeIncome + row.customIncomeGenerated + row.srsNetWithdrawal),
     spending: Math.round(row.spendingNeed),
     cashWithdrawal: Math.round(row.cashWithdrawal),
     investmentWithdrawal: Math.round(row.investmentWithdrawal),
@@ -496,6 +408,17 @@ export default function App() {
 
   function updateInput<K extends keyof RetirementInputs>(key: K, value: RetirementInputs[K]) {
     setInputs((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateSrsFirstContributionPeriod(value: SrsFirstContributionPeriod) {
+    setInputs((current) => {
+      const minimumAge = srsPrescribedRetirementAge({ srsFirstContributionPeriod: value });
+      return {
+        ...current,
+        srsFirstContributionPeriod: value,
+        srsFirstWithdrawalAge: Math.max(current.srsFirstWithdrawalAge, minimumAge)
+      };
+    });
   }
 
   function addCustomIncomeStream() {
@@ -915,7 +838,7 @@ export default function App() {
                           <div className="field-grid">
                             <TextField label="Event Name" placeholder="e.g. Property sale or inheritance" value={event.label} onChange={(value) => updateOneTimeEvent(event.id, { label: value })} />
                             <NumberField label="Event Age" value={event.age} onChange={(value) => updateOneTimeEvent(event.id, { age: value })} />
-                            <NumberField label="Amount" helper="Today's dollars; applied once." prefix="$" value={event.amount} onChange={(value) => updateOneTimeEvent(event.id, { amount: value })} />
+                            <NumberField label="Amount" helper="Future nominal amount applied once at the selected age." prefix="$" value={event.amount} onChange={(value) => updateOneTimeEvent(event.id, { amount: value })} />
                             <SelectField<OneTimeEventDirection> label="Cash Flow Direction" value={event.direction} options={["inflow", "outflow"]} labels={{ inflow: "Adds to cash", outflow: "Uses cash" }} onChange={(value) => updateOneTimeEvent(event.id, { direction: value })} />
                           </div>
                         </article>
@@ -933,19 +856,63 @@ export default function App() {
               />
               {inputs.includeSrs ? (
                 <div className="custom-income-panel">
-                  <div className="custom-income-panel__header"><div><h3>SRS Planning</h3><p>Annual contributions and growth are shown separately from cash and investments. The withdrawal schedule is an annual approximation of the ten-year window.</p></div></div>
+                  <div className="custom-income-panel__header">
+                    <div>
+                      <div className="heading-with-tip">
+                        <h3>SRS Planning</h3>
+                        <InfoTip text="Your penalty-free withdrawal age is the statutory retirement age in force when you first contributed: 62 before 1 July 2022, 63 from 1 July 2022 to 30 June 2026, and 64 from 1 July 2026. If unsure, check with your SRS operator." />
+                      </div>
+                      <p>Annual contributions, tax-aware withdrawals, estimated tax, and the final deemed withdrawal are shown separately.</p>
+                    </div>
+                  </div>
                   <div className="field-grid">
+                    <SelectField<SrsResidencyStatus>
+                      label="SRS Residency Status"
+                      helper={`Annual contribution cap: ${formatCurrency(srsContributionCap(inputs))}.`}
+                      value={inputs.srsResidency}
+                      options={["Singapore Citizen Or Permanent Resident", "Foreigner"]}
+                      labels={{
+                        "Singapore Citizen Or Permanent Resident": "Singapore Citizen / PR",
+                        Foreigner: "Foreigner"
+                      }}
+                      onChange={(value) => updateInput("srsResidency", value)}
+                    />
+                    <SelectField<SrsFirstContributionPeriod>
+                      label="When Was Your First SRS Contribution?"
+                      helper={`Sets the earliest penalty-free withdrawal age to ${srsPrescribedRetirementAge(inputs)}.`}
+                      value={inputs.srsFirstContributionPeriod}
+                      options={["Not Sure", "Before 1 July 2022", "1 July 2022 To 30 June 2026", "From 1 July 2026"]}
+                      labels={{
+                        "Not Sure": "Not sure - use age 64",
+                        "Before 1 July 2022": "Before 1 Jul 2022 - age 62",
+                        "1 July 2022 To 30 June 2026": "1 Jul 2022 to 30 Jun 2026 - age 63",
+                        "From 1 July 2026": "From 1 Jul 2026 - age 64"
+                      }}
+                      onChange={updateSrsFirstContributionPeriod}
+                    />
                     <NumberField label="Current SRS Balance" prefix="$" value={inputs.srsCurrentBalance} onChange={(value) => updateInput("srsCurrentBalance", value)} />
-                    <NumberField label="Annual SRS Contribution" helper="Contributions stop at retirement or the contribution end age." prefix="$" value={inputs.srsAnnualContribution} onChange={(value) => updateInput("srsAnnualContribution", value)} />
+                    <NumberField label="Annual SRS Contribution" helper={`Contributions stop at retirement or the contribution end age and are capped at ${formatCurrency(srsContributionCap(inputs))}.`} prefix="$" value={inputs.srsAnnualContribution} onChange={(value) => updateInput("srsAnnualContribution", value)} />
                     <NumberField label="Contribution End Age" value={inputs.srsContributionEndAge} onChange={(value) => updateInput("srsContributionEndAge", value)} />
                     <NumberField label="SRS Return Rate" suffix="%" step={0.1} value={inputs.srsReturnRate} onChange={(value) => updateInput("srsReturnRate", value)} />
-                    <NumberField label="First Penalty-Free Withdrawal Age" helper="Default 63. Use 62 only if your first SRS contribution was made under the earlier statutory retirement age." value={inputs.srsFirstWithdrawalAge} onChange={(value) => updateInput("srsFirstWithdrawalAge", value)} />
+                    <NumberField label="First Penalty-Free Withdrawal Age" helper={`Cannot be earlier than age ${srsPrescribedRetirementAge(inputs)} for the selected first-contribution period.`} min={srsPrescribedRetirementAge(inputs)} value={inputs.srsFirstWithdrawalAge} onChange={(value) => updateInput("srsFirstWithdrawalAge", value)} />
+                    <SelectField<SrsWithdrawalStrategy>
+                      label="Withdrawal Strategy"
+                      helper="Tax Aware spreads the projected balance across the remaining years. Even uses the starting balance as a fixed ten-year base, with any residual deemed withdrawn in year ten."
+                      value={inputs.srsWithdrawalStrategy}
+                      options={["Tax Aware", "Even Over Ten Years"]}
+                      onChange={(value) => updateInput("srsWithdrawalStrategy", value)}
+                    />
                   </div>
                   <div className="mini-metrics">
                     <MetricCard label="Projected SRS Contributions" value={formatCurrency(projection.summary.totalSrsContributions)} note="Across the build-up years" tone="blue" />
-                    <MetricCard label="Projected SRS Withdrawals" value={formatCurrency(projection.summary.totalSrsWithdrawals)} note="Spread across up to ten years" tone="good" />
-                    <MetricCard label="SRS Balance At End" value={formatCurrency(projection.rows.at(-1)?.srsBalance ?? 0)} note="Remaining after modeled withdrawals" tone="neutral" />
+                    <MetricCard label="Gross SRS Withdrawals" value={formatCurrency(projection.summary.totalSrsWithdrawals)} note="Includes the final deemed withdrawal" tone="good" />
+                    <MetricCard label="Estimated SRS Tax" value={formatCurrency(projection.summary.totalSrsEstimatedTax)} note="Assumes no other taxable income" tone={projection.summary.totalSrsEstimatedTax > 0 ? "warn" : "neutral"} />
+                    <MetricCard label="Net SRS Withdrawals" value={formatCurrency(projection.summary.totalSrsNetWithdrawals)} note="Available for spending or cash" tone="blue" />
+                    <MetricCard label="SRS Balance At End" value={formatCurrency(projection.rows.at(-1)?.srsBalance ?? 0)} note="Zero after the ten-year window, except life annuities" tone="neutral" />
                   </div>
+                  <p className="source-note">
+                    Qualifying withdrawals are modelled with 50% taxable. For Singapore citizens and PRs, resident rates are applied assuming no other taxable income, so up to SGD 40,000 gross a year generally produces no tax. For foreigners, the app shows estimated 24% withholding on the taxable half; final tax may differ. The life-annuity exception is not modelled.
+                  </p>
                 </div>
               ) : null}
             </div>
@@ -1060,7 +1027,7 @@ export default function App() {
           </Section>
         </div>
 
-        <ReadinessPanel projection={projection} inputs={inputs} />
+        <CollapsibleReadinessPanel projection={projection} inputs={inputs} />
       </div>
 
       <section className="results-section" id="results">
@@ -1274,7 +1241,7 @@ export default function App() {
               {showTable ? "Hide Table" : `View ${formatNumber(projection.rows.length)} Rows`}
             </button>
           </div>
-          {showTable ? <YearTable rows={projection.rows} /> : null}
+          {showTable ? <ResponsiveYearTable rows={projection.rows} /> : null}
         </section>
       </section>
 
