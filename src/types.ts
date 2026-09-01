@@ -9,6 +9,7 @@ export type CustomIncomeFrequency = "monthly" | "yearly";
 export type CustomIncomeGrowthMode = "fixed" | "increasing";
 
 export type OneTimeEventDirection = "inflow" | "outflow";
+export type OneTimeEventCertainty = "expected" | "possible";
 
 export type RetirementSumChoice = "Basic" | "Full" | "Enhanced";
 
@@ -45,6 +46,7 @@ export interface OneTimeFinancialEvent {
   age: number;
   amount: number;
   direction: OneTimeEventDirection;
+  certainty?: OneTimeEventCertainty;
 }
 
 export interface RetirementInputs {

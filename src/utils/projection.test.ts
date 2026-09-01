@@ -769,6 +769,74 @@ describe("projectRetirement", () => {
     expect(age66.cpfMaContribution).toBeGreaterThan(0);
   });
 
+  it("uses the 2026 age-55-to-60 contribution rate for someone still working", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 56,
+      retirementAge: 60,
+      endAge: 56,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      includeCpf: true,
+      cpfWorkStatus: "Employed",
+      grossMonthlyIncome: 5_000,
+      cpfOa: 0,
+      cpfSa: 0,
+      cpfMa: 0,
+      cpfRa: 0,
+      cpfLifeStartAge: 65,
+      retirementSpendingAnnual: 0
+    });
+
+    const first = projection.rows[0];
+    expect(first.cpfTotalContribution).toBeCloseTo(20_400, 0);
+    expect(first.cpfEmployeeContribution).toBeCloseTo(10_800, 0);
+    expect(first.cpfSaContribution).toBe(0);
+    expect(first.cpfRaContribution).toBeGreaterThan(0);
+  });
+
+  it("migrates a legacy SA balance for a current age-55-plus profile", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 58,
+      retirementAge: 65,
+      endAge: 58,
+      includeCpf: true,
+      cpfWorkStatus: "Not contributing",
+      cpfOa: 10_000,
+      cpfSa: 100_000,
+      cpfRa: 150_000,
+      cpfMa: 0,
+      retirementSpendingAnnual: 0
+    });
+
+    expect(projection.rows[0].cpfSa).toBe(0);
+    expect(projection.rows[0].cpfRa).toBeGreaterThan(150_000);
+  });
+
+  it("aligns the age-65 Standard Plan estimate with CPF Board's 2026 reference example", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 55,
+      retirementAge: 65,
+      endAge: 65,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      includeCpf: true,
+      cpfWorkStatus: "Not contributing",
+      cpfOa: 0,
+      cpfSa: 0,
+      cpfMa: 0,
+      cpfRa: 50_000,
+      cpfLifeStartAge: 65,
+      cpfLifePlan: "Standard",
+      cpfLifeMonthlyOverride: 0,
+      retirementSpendingAnnual: 0
+    });
+
+    expect(projection.summary.cpfLifeMonthlyAtStart).toBeCloseTo(490, -1);
+  });
+
   it("deducts estimated CPF OA housing usage before retirement", () => {
     const withoutHousing = projectRetirement({
       ...defaultInputs,

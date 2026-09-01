@@ -13,7 +13,7 @@ import type {
   RetirementYear
 } from "../types";
 
-const CURRENT_POLICY_YEAR = 2026;
+export const CURRENT_POLICY_YEAR = 2026;
 const CPF_ANNUAL_CAP_2026 = 37_740;
 const SRS_LOCAL_ANNUAL_CAP = 15_300;
 const SRS_FOREIGNER_ANNUAL_CAP = 35_700;
@@ -160,8 +160,16 @@ export function bhsForYear(year: number) {
   return Math.round((79_000 * 1.046 ** (year - 2026)) / 100) * 100;
 }
 
-function projectionYear(inputs: RetirementInputs, age: number) {
+export function projectionYear(inputs: RetirementInputs, age: number) {
   return CURRENT_POLICY_YEAR + Math.max(0, age - inputs.currentAge);
+}
+
+export function progressedCpfPrYear(startingYear: CpfPrYear, yearsFromStart: number): CpfPrYear {
+  if (startingYear === "Third Year Or Later") return startingYear;
+  if (startingYear === "Second Year") return yearsFromStart >= 1 ? "Third Year Or Later" : startingYear;
+  if (yearsFromStart >= 2) return "Third Year Or Later";
+  if (yearsFromStart >= 1) return "Second Year";
+  return "First Year";
 }
 
 function cpfTargetForChoice(choice: RetirementSumChoice, year: number) {
@@ -301,7 +309,10 @@ export function cpfContributionForYear(inputs: RetirementInputs, age: number): C
   }
 
   const year = projectionYear(inputs, age);
-  const rate = cpfContributionRates(inputs.cpfResidency, inputs.cpfPrYear, inputs.cpfPrRateType, age, year);
+  const prYear = inputs.cpfResidency === "Permanent Resident"
+    ? progressedCpfPrYear(inputs.cpfPrYear, Math.max(0, age - inputs.currentAge))
+    : inputs.cpfPrYear;
+  const rate = cpfContributionRates(inputs.cpfResidency, prYear, inputs.cpfPrRateType, age, year);
   const allocation = cpfAllocationRates(age, year);
   const cpfWage = Math.min(8000, Math.max(0, annualIncome / 12)) * 12;
   const monthly = monthlyCpfAmount(cpfWage / 12, rate);
@@ -315,29 +326,48 @@ export function cpfContributionForYear(inputs: RetirementInputs, age: number): C
     : { oa, sa: retirementAllocation, ma, ra: 0, total, employee, employer: Math.max(0, total - employee) };
 }
 
-function cpfLifeMonthlyFromRaBase(ra: number) {
-  const points = [
-    [82_400, 490],
-    [170_100, 950],
-    [227_900, 1250],
-    [330_100, 1780],
-    [445_600, 2380],
-    [650_100, 3440]
-  ];
-  if (ra <= 0) return 0;
-  if (ra <= points[0][0]) return (ra / points[0][0]) * points[0][1];
+function interpolatePoints(value: number, points: number[][]) {
+  if (value <= 0) return 0;
+  if (value <= points[0][0]) return (value / points[0][0]) * points[0][1];
   for (let index = 1; index < points.length; index += 1) {
-    if (ra <= points[index][0]) {
+    if (value <= points[index][0]) {
       const a = points[index - 1];
       const b = points[index];
-      const t = (ra - a[0]) / (b[0] - a[0]);
+      const t = (value - a[0]) / (b[0] - a[0]);
       return a[1] + (b[1] - a[1]) * t;
     }
   }
   return points.at(-1)![1];
 }
 
-function cpfLifeAnnual(
+function cpfLifeMonthlyFromRaBase(ra: number, startAge: number) {
+  // CPF Board's 2026 reference examples are expressed as RA savings at age 55.
+  // Convert those reference balances to the selected payout age at 4% p.a.,
+  // then interpolate between the published age-65 and age-70 monthly payouts.
+  const age = Math.min(70, Math.max(65, startAge));
+  const payoutAgeFactor = (age - 65) / 5;
+  const references = [
+    [50_000, 490, 670],
+    [110_200, 950, 1_280],
+    [150_000, 1_250, 1_670],
+    [220_400, 1_780, 2_380],
+    [300_000, 2_380, 3_170],
+    [440_800, 3_440, 4_580]
+  ];
+  const points = references.map(([at55, payout65, payout70]) => {
+    let projectedRa = at55;
+    for (let projectionAge = 55; projectionAge < age; projectionAge += 1) {
+      projectedRa += projectedRa * 0.04
+        + Math.min(30_000, projectedRa) * 0.02
+        + Math.min(30_000, Math.max(0, projectedRa - 30_000)) * 0.01;
+    }
+    return [projectedRa, payout65 + (payout70 - payout65) * payoutAgeFactor];
+  });
+  if (ra <= 0) return 0;
+  return interpolatePoints(ra, points);
+}
+
+export function cpfLifeAnnual(
   inputs: RetirementInputs,
   base: number,
   startAge: number,
@@ -345,7 +375,7 @@ function cpfLifeAnnual(
 ) {
   let monthly = inputs.cpfLifeMonthlyOverride > 0
     ? inputs.cpfLifeMonthlyOverride
-    : cpfLifeMonthlyFromRaBase(base);
+    : cpfLifeMonthlyFromRaBase(base, startAge);
 
   if (inputs.cpfLifeMonthlyOverride <= 0 && inputs.cpfLifePlan === "Basic") {
     monthly *= 0.86;
@@ -358,7 +388,7 @@ function cpfLifeAnnual(
   return monthly * 12;
 }
 
-function cpfInterest(cpf: CpfState, age: number, lifeStarted: boolean, plan: CpfLifePlan) {
+export function cpfInterest(cpf: CpfState, age: number, lifeStarted: boolean, plan: CpfLifePlan) {
   let oa = cpf.oa * 0.025;
   let sa = cpf.sa * 0.04;
   let ma = cpf.ma * 0.04;
@@ -376,7 +406,7 @@ function cpfInterest(cpf: CpfState, age: number, lifeStarted: boolean, plan: Cpf
   return { oa, sa, ma, ra };
 }
 
-type CpfState = {
+export type CpfState = {
   oa: number;
   sa: number;
   ma: number;
@@ -386,6 +416,39 @@ type CpfState = {
   raFormed: boolean;
   lifeStarted: boolean;
 };
+
+export function createInitialCpfState(inputs: RetirementInputs): CpfState {
+  if (!inputs.includeCpf) {
+    return { oa: 0, sa: 0, ma: 0, ra: 0, lifeReserve: 0, lifeBase: 0, raFormed: false, lifeStarted: false };
+  }
+
+  let oa = clampNonNegative(inputs.cpfOa);
+  let sa = clampNonNegative(inputs.cpfSa);
+  let ra = clampNonNegative(inputs.cpfRa);
+  const raFormed = inputs.currentAge >= 55;
+
+  if (raFormed && sa > 0) {
+    // Compatibility for an older saved profile: SA is closed from age 55.
+    // Move legacy SA to RA up to the current FRS, then to OA.
+    const roomInRa = Math.max(0, retirementSumsForYear(CURRENT_POLICY_YEAR).frs - ra);
+    const toRa = Math.min(sa, roomInRa);
+    ra += toRa;
+    sa -= toRa;
+    oa += sa;
+    sa = 0;
+  }
+
+  return {
+    oa,
+    sa,
+    ma: clampNonNegative(inputs.cpfMa),
+    ra,
+    lifeReserve: 0,
+    lifeBase: 0,
+    raFormed,
+    lifeStarted: false
+  };
+}
 
 function sanitizeCustomIncomeStreams(inputs: RetirementInputs, currentAge: number, endAge: number): CustomIncomeStream[] {
   return (inputs.customIncomeStreams ?? []).map((stream, index) => {
@@ -417,7 +480,8 @@ function sanitizeOneTimeEvents(inputs: RetirementInputs, currentAge: number, end
     label: event.label?.trim() || `Financial Event ${index + 1}`,
     age: Math.min(endAge, Math.max(currentAge, Math.floor(clampNonNegative(event.age)))),
     amount: clampNonNegative(event.amount),
-    direction: event.direction === "outflow" ? "outflow" : "inflow"
+    direction: event.direction === "outflow" ? "outflow" : "inflow",
+    certainty: event.certainty === "possible" ? "possible" : "expected"
   }));
 }
 
@@ -701,16 +765,7 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
   let investmentBalance = inputs.currentInvestments;
   let srsBalance = inputs.includeSrs ? inputs.srsCurrentBalance : 0;
   let srsWithdrawalBase = 0;
-  const cpf: CpfState = {
-    oa: inputs.includeCpf ? inputs.cpfOa : 0,
-    sa: inputs.includeCpf ? inputs.cpfSa : 0,
-    ma: inputs.includeCpf ? inputs.cpfMa : 0,
-    ra: inputs.includeCpf ? inputs.cpfRa : 0,
-    lifeReserve: 0,
-    lifeBase: 0,
-    raFormed: false,
-    lifeStarted: false
-  };
+  const cpf = createInitialCpfState(inputs);
 
   for (let age = inputs.currentAge; age <= inputs.endAge; age += 1) {
     const phase: RetirementYear["phase"] = age < inputs.retirementAge ? "build-up" : "retirement";

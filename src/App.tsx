@@ -10,9 +10,10 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import { BadgeCheck, Calculator, CircleAlert, CircleHelp, Moon, Plus, RotateCcw, ShieldCheck, Sun, Trash2 } from "lucide-react";
+import { BadgeCheck, Calculator, Check, CircleAlert, CircleHelp, Moon, Pencil, Plus, RotateCcw, ShieldCheck, Sparkles, Sun, Trash2 } from "lucide-react";
 import { YearTable as ResponsiveYearTable } from "./components/YearTable";
-import { ReadinessPanel as CollapsibleReadinessPanel } from "./components/ReadinessPanel";
+import { OnboardingWizard } from "./components/OnboardingWizard";
+import { CouplePlanner } from "./components/CouplePlanner";
 import {
   cpfContributionForYear,
   defaultInputs,
@@ -21,6 +22,7 @@ import {
   srsPrescribedRetirementAge
 } from "./utils/projection";
 import { formatCurrency, formatNumber, formatPercent } from "./utils/formatters";
+import type { OnboardingAnswers } from "./onboarding";
 import type {
   CpfLifePlan,
   CpfPrRateType,
@@ -76,9 +78,9 @@ const lifestylePresets: Array<{
   },
   {
     id: "Luxurious",
-    label: "Luxurious",
-    monthlyAmount: 8_000,
-    note: "A generous lifestyle allowance for travel, family giving, premium experiences, and wider discretionary choices.",
+    label: "More flexibility",
+    monthlyAmount: 5_500,
+    note: "More room for travel, hobbies, family support, and wider discretionary choices.",
     breakdown: [
       { label: "Daily living", share: 28 },
       { label: "Housing and utilities", share: 16 },
@@ -321,6 +323,8 @@ function ChartLegend({ items }: { items: { label: string; className: string }[] 
 }
 
 type ThemePreference = "light" | "dark";
+type AppMode = "onboarding" | "processing" | "results" | "edit";
+type ExperienceMode = "individual" | "couple";
 
 function getInitialTheme(): ThemePreference {
   if (typeof window === "undefined") return "light";
@@ -356,6 +360,9 @@ export default function App() {
   const [inputs, setInputs] = useState<RetirementInputs>(defaultInputs);
   const [showTable, setShowTable] = useState(false);
   const [theme, setTheme] = useState<ThemePreference>(getInitialTheme);
+  const [appMode, setAppMode] = useState<AppMode>("onboarding");
+  const [experienceMode, setExperienceMode] = useState<ExperienceMode>("individual");
+  const [onboardingAnswers, setOnboardingAnswers] = useState<OnboardingAnswers | null>(null);
   const projection = useMemo(() => projectRetirement(inputs), [inputs]);
   const cpfPreview = cpfContributionForYear(inputs, inputs.currentAge);
   const retirementRow = projection.rows.find((row) => row.age === inputs.retirementAge);
@@ -406,8 +413,76 @@ export default function App() {
     shortfall: Math.round(row.shortfall)
   }));
 
+  const resultHeadline = projection.summary.status === "ready"
+    ? `Projected spending remains funded through age ${inputs.endAge}`
+    : projection.summary.firstShortfallAge
+      ? `A projected funding gap begins around age ${projection.summary.firstShortfallAge}`
+      : "The current assumptions show a retirement funding gap";
+
+  const resultInsights = useMemo(() => {
+    const years = Math.max(0, inputs.retirementAge - inputs.currentAge);
+    const monthlyContributions = inputs.cashSavingsContribution + inputs.investmentContribution;
+    const insights: Array<{ title: string; body: string; tone: "blue" | "good" | "warn" }> = [
+      {
+        title: "Your lifestyle target changes with time",
+        body: `${formatCurrency(monthlyRetirementSpendingToday)} per month in today's dollars becomes approximately ${formatCurrency(projectedMonthlyRetirementSpending)} per month at age ${inputs.retirementAge} using ${formatPercent(inputs.retirementSpendingInflationRate)} inflation.`,
+        tone: "blue"
+      },
+      {
+        title: `${years} accumulation year${years === 1 ? "" : "s"} in this scenario`,
+        body: monthlyContributions > 0
+          ? `The projection includes ${formatCurrency(monthlyContributions)} of combined monthly cash and investment contributions until age ${inputs.retirementAge}.`
+          : "The projection does not assume any new monthly contributions, so it shows what the resources already entered may support.",
+        tone: monthlyContributions > 0 ? "good" : "warn"
+      }
+    ];
+
+    if (!inputs.includeCpf) {
+      insights.push({
+        title: "CPF is excluded in this view",
+        body: "You chose a non-CPF view, so this result uses cash and investments only. You can include CPF balances, contributions and CPF LIFE later from Edit assumptions.",
+        tone: "warn"
+      });
+    } else if (cpfLifeBridgeYears > 0) {
+      insights.push({
+        title: `${cpfLifeBridgeYears}-year bridge before CPF LIFE`,
+        body: `Retirement begins at age ${inputs.retirementAge}, while CPF LIFE starts at age ${inputs.cpfLifeStartAge}. The model uses other available resources during the intervening years.`,
+        tone: "blue"
+      });
+    }
+
+    return insights;
+  }, [cpfLifeBridgeYears, inputs, monthlyRetirementSpendingToday, projectedMonthlyRetirementSpending]);
+
   function updateInput<K extends keyof RetirementInputs>(key: K, value: RetirementInputs[K]) {
     setInputs((current) => ({ ...current, [key]: value }));
+  }
+
+  function completeOnboarding(nextInputs: RetirementInputs, answers: OnboardingAnswers) {
+    setInputs(nextInputs);
+    setOnboardingAnswers(answers);
+    setShowTable(false);
+    setAppMode("processing");
+  }
+
+  function exploreSample() {
+    setInputs(defaultInputs);
+    setOnboardingAnswers(null);
+    setShowTable(false);
+    setAppMode("processing");
+  }
+
+  function startOver() {
+    setInputs(defaultInputs);
+    setOnboardingAnswers(null);
+    setShowTable(false);
+    setAppMode("onboarding");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function showResults() {
+    setAppMode("results");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function updateSrsFirstContributionPeriod(value: SrsFirstContributionPeriod) {
@@ -472,15 +547,55 @@ export default function App() {
     window.localStorage.setItem("retirement-readiness-theme", theme);
   }, [theme]);
 
+  useEffect(() => {
+    if (appMode !== "processing") return undefined;
+    const timer = window.setTimeout(() => {
+      setAppMode("results");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [appMode]);
+
+  if (experienceMode === "couple") {
+    return (
+      <main className="app-shell">
+        <section className="hero">
+          <div>
+            <p className="eyebrow">Simple Singapore Retirement Checkup</p>
+            <h1>Retirement<wbr />Readiness</h1>
+            <p>Bring two individual CPF and SRS journeys into one clear household retirement picture.</p>
+          </div>
+          <div className="hero-actions">
+            <button className="theme-toggle" type="button" onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>
+              {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+              {theme === "dark" ? "Light" : "Dark"}
+            </button>
+          </div>
+        </section>
+        <CouplePlanner onExit={() => {
+          setExperienceMode("individual");
+          setInputs(defaultInputs);
+          setOnboardingAnswers(null);
+          setShowTable(false);
+          setAppMode("onboarding");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }} />
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell">
       <section className="hero">
         <div>
           <p className="eyebrow">Simple Singapore Retirement Checkup</p>
-          <h1>RetirementReadiness</h1>
+          <h1>Retirement<wbr />Readiness</h1>
           <p>
-            A calm, one-page retirement projection. Enter a few numbers, and see whether your cash, investments,
-            CPF drawdowns, and CPF LIFE can support your retirement spending.
+            {appMode === "onboarding"
+              ? "Start with a few guided questions, then explore what your assumptions could mean for retirement."
+              : appMode === "edit"
+                ? "Refine the detailed assumptions behind your retirement projection."
+                : "Explore your result first, then change the assumptions that matter to you."}
           </p>
         </div>
         <div className="hero-actions">
@@ -494,33 +609,56 @@ export default function App() {
             {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
             {theme === "dark" ? "Light" : "Dark"}
           </button>
-          <button className="reset-button" type="button" onClick={() => setInputs(defaultInputs)}>
-            <RotateCcw size={18} />
-            Reset Sample
-          </button>
+          {appMode === "results" || appMode === "edit" ? (
+            <button className="secondary-action" type="button" onClick={startOver}>
+              <RotateCcw size={18} /> Start over
+            </button>
+          ) : null}
         </div>
       </section>
 
-      <section className="summary-strip" aria-label="Projection assumptions">
+      {appMode === "results" || appMode === "edit" ? <section className="summary-strip" aria-label="Projection assumptions">
         <div>
           <span>Inflation</span>
-          <strong>2.5% p.a.</strong>
+          <strong>{formatPercent(inputs.retirementSpendingInflationRate)} p.a.</strong>
         </div>
         <div>
           <span>Cash Savings</span>
-          <strong>1% p.a.</strong>
+          <strong>{formatPercent(inputs.cashInterestRate)} p.a.</strong>
         </div>
         <div>
           <span>Investments</span>
-          <strong>5% p.a.</strong>
+          <strong>{formatPercent(inputs.preRetirementInvestmentReturnRate)} p.a.</strong>
         </div>
         <div>
           <span>CPF</span>
-          <strong>Official Rate Tables</strong>
+          <strong>{inputs.includeCpf ? "Included" : "Not included"}</strong>
         </div>
-      </section>
+      </section> : null}
 
-      <div className="page-grid">
+      {appMode === "onboarding" ? (
+        <OnboardingWizard initialInputs={defaultInputs} onComplete={completeOnboarding} onExploreSample={exploreSample} onPlanTogether={() => setExperienceMode("couple")} />
+      ) : null}
+
+      {appMode === "processing" ? (
+        <section className="projection-processing" aria-live="polite" aria-label="Building your retirement projection">
+          <div className="processing-orbit" aria-hidden="true"><Sparkles size={24} /></div>
+          <p className="eyebrow">Building your retirement picture</p>
+          <h2>Turning your assumptions into a year-by-year projection…</h2>
+          <div className="processing-steps">
+            <span><Check size={17} /> Translating today’s lifestyle into future spending</span>
+            <span><Check size={17} /> Projecting your current resources</span>
+            <span><Check size={17} /> Comparing funding with retirement spending</span>
+          </div>
+        </section>
+      ) : null}
+
+      {appMode === "edit" ? <>
+      <div className="edit-mode-header">
+        <div><p className="eyebrow">Edit assumptions</p><h2>Fine-tune your retirement picture.</h2><p>Changes recalculate immediately. Return to the outcome when you are ready.</p></div>
+        <button className="primary-action" type="button" onClick={showResults}><BadgeCheck size={18} /> View updated result</button>
+      </div>
+      <div className="page-grid page-grid--edit">
         <div className="input-flow">
           <Section number="1" title="About You" helper="These ages decide when saving stops, retirement spending starts, and when CPF LIFE begins.">
             <div className="field-grid">
@@ -558,7 +696,7 @@ export default function App() {
                 <p className="eyebrow">Lifestyle Preset</p>
                 <h3>{selectedLifestylePreset?.label ?? "Custom"} spending target</h3>
                 <p>
-                  {selectedLifestylePreset?.note ?? "Use your own monthly number if the preset does not match the client's retirement lifestyle."}
+                  {selectedLifestylePreset?.note ?? "Use your own monthly number if the preset does not match the retirement lifestyle you have in mind."}
                 </p>
               </div>
               {selectedLifestylePreset ? (
@@ -1027,20 +1165,25 @@ export default function App() {
           </Section>
         </div>
 
-        <CollapsibleReadinessPanel projection={projection} inputs={inputs} />
       </div>
 
-      <section className="results-section" id="results">
+      <div className="edit-mode-footer">
+        <button className="primary-action" type="button" onClick={showResults}><BadgeCheck size={18} /> View updated result</button>
+      </div>
+      </> : null}
+
+      {appMode === "results" ? <section className="results-section" id="results">
         <div className="results-header">
           <div>
-            <p className="eyebrow">Your Result</p>
-            <h2>{projection.summary.status === "ready" ? "Ready through the projection age" : "More funding is needed"}</h2>
+            <p className="eyebrow">{onboardingAnswers?.preferredName ? `${onboardingAnswers.preferredName}, your initial picture` : "Your initial retirement picture"}</p>
+            <h2>{resultHeadline}</h2>
             <p>
-              Retirement need funded: {formatCurrency(projection.summary.totalFundedRetirementNeed)} of {formatCurrency(projection.summary.totalRetirementNeed)}.
+              Based on the assumptions entered, the model funds {formatCurrency(projection.summary.totalFundedRetirementNeed)} of an estimated {formatCurrency(projection.summary.totalRetirementNeed)} retirement spending need.
             </p>
             <p className="result-subline">
-              Expected monthly spending at age {inputs.retirementAge}: <strong>{formatCurrency(projectedMonthlyRetirementSpending)}</strong>
+              Monthly lifestyle target: <strong>{formatCurrency(monthlyRetirementSpendingToday)} today</strong> · <strong>{formatCurrency(projectedMonthlyRetirementSpending)} at age {inputs.retirementAge}</strong>
             </p>
+            <button className="results-edit-action" type="button" onClick={() => { setAppMode("edit"); window.scrollTo({ top: 0, behavior: "smooth" }); }}><Pencil size={17} /> Edit assumptions</button>
           </div>
           <div className="results-header__badge">
             {projection.summary.status === "ready" ? <BadgeCheck size={28} /> : <CircleAlert size={28} />}
@@ -1049,36 +1192,59 @@ export default function App() {
         </div>
 
         <div className="metric-grid">
-          <MetricCard label="Readiness" value={formatPercent(projection.summary.readinessPercent)} note={projection.summary.headline} tone={projection.summary.status === "ready" ? "good" : "warn"} />
-          <MetricCard label="Shortfall" value={formatCurrency(projection.summary.totalShortfall)} note="Total unfunded spending gap" tone={projection.summary.totalShortfall > 0 ? "warn" : "good"} />
-          <MetricCard label="Invest More Monthly" value={formatCurrency(projection.summary.extraMonthlyInvestmentRequired)} note={`Uses ${formatPercent(inputs.preRetirementInvestmentReturnRate)} investment return`} tone="blue" />
+          <MetricCard label="Estimated need funded" value={formatPercent(projection.summary.readinessPercent)} note="Across the full projection period" tone={projection.summary.status === "ready" ? "good" : "warn"} />
+          <MetricCard label="Projected funding lasts" value={projection.summary.status === "ready" ? `Through age ${inputs.endAge}` : `To about age ${projection.summary.runwayAge}`} note={projection.summary.status === "ready" ? "No unfunded year in this scenario" : "First shortfall may follow"} tone={projection.summary.status === "ready" ? "good" : "warn"} />
+          <MetricCard label="Funds at retirement" value={formatCurrency(retirementRow?.openingBalance ?? 0)} note={`At age ${inputs.retirementAge}`} tone="blue" />
           <MetricCard label="Peak Wealth" value={formatCurrency(projection.summary.peakBalance)} note={`At age ${projection.summary.peakBalanceAge}`} />
         </div>
 
+        <section className="insights-card" aria-labelledby="insights-title">
+          <div className="insights-card__header">
+            <div><p className="eyebrow">What stands out</p><h3 id="insights-title">Insights from the assumptions you entered</h3></div>
+            <Sparkles size={24} />
+          </div>
+          <div className="insights-grid">
+            {resultInsights.map((insight) => (
+              <article className={`insight-item insight-item--${insight.tone}`} key={insight.title}>
+                <strong>{insight.title}</strong>
+                <p>{insight.body}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="scenario-details-card" aria-labelledby="individual-scenario-details-title">
+          <div><p className="eyebrow">Release 3 and 4 details</p><h2 id="individual-scenario-details-title">What else this result is counting</h2><p>Each item below maps directly to the year-by-year projection. Switch uncertain assumptions off and compare the result before relying on them.</p></div>
+          <div className="scenario-detail-grid">
+            <article><span>One-time event</span><strong>{inputs.includeOneTimeEvents ? inputs.oneTimeEvents[0]?.label ?? "Included" : "Not included"}</strong><small>{inputs.includeOneTimeEvents && inputs.oneTimeEvents[0] ? `${formatCurrency(inputs.oneTimeEvents[0].amount)} ${inputs.oneTimeEvents[0].direction} at age ${inputs.oneTimeEvents[0].age}${inputs.oneTimeEvents[0].certainty === "possible" ? " · Possible" : ""}` : "No event changes this result"}</small></article>
+            <article><span>Other retirement income</span><strong>{inputs.customIncomeStreams[0]?.label ?? "Not included"}</strong><small>{inputs.customIncomeStreams[0] ? `${formatCurrency(inputs.customIncomeStreams[0].amount)}/${inputs.customIncomeStreams[0].frequency === "monthly" ? "month" : "year"} from age ${inputs.customIncomeStreams[0].startAge} to ${inputs.customIncomeStreams[0].endAge}` : "CPF LIFE, SRS and portfolio income remain separately displayed"}</small></article>
+            <article><span>Core assumptions</span><strong>{formatPercent(inputs.retirementSpendingInflationRate)} inflation · {formatPercent(inputs.preRetirementInvestmentReturnRate)} investment return</strong><small>Projection ends at age {inputs.endAge}; retirement investment return is {formatPercent(inputs.retirementReturnRate)}</small></article>
+          </div>
+        </section>
+
         <section className="gap-card" aria-labelledby="gap-card-title">
           <div className="gap-card__copy">
-            <p className="eyebrow">How To Close The Gap</p>
-            <h3 id="gap-card-title">Compare three simple levers.</h3>
+            <p className="eyebrow">Explore the model</p>
+            <h3 id="gap-card-title">See what could change the picture.</h3>
             <p>
-              If the projection has a shortfall, these estimates show the monthly change needed from today.
-              Use the option that feels most realistic for the client.
+              If there is a projected gap, these figures show three mathematical sensitivities. They are not recommendations—use Edit assumptions to explore the trade-offs yourself.
             </p>
           </div>
           <div className="gap-options">
             <GapOptionCard
-              label="Save More Cash"
+              label="Additional Monthly Cash"
               value={formatCurrency(projection.summary.extraMonthlyCashSavingsRequired)}
               note={`Assumes ${formatPercent(inputs.cashInterestRate)} cash savings rate`}
               tone="blue"
             />
             <GapOptionCard
-              label="Invest More"
+              label="Additional Monthly Investing"
               value={formatCurrency(projection.summary.extraMonthlyInvestmentRequired)}
               note={`Assumes ${formatPercent(inputs.preRetirementInvestmentReturnRate)} return before retirement`}
               tone="good"
             />
             <GapOptionCard
-              label="Spend Less In Retirement"
+              label="Monthly Spending Difference"
               value={formatCurrency(projection.summary.monthlySpendingReductionRequired)}
               note="Today's monthly spending reduction, inflated by the app over time"
               tone="warn"
@@ -1243,11 +1409,11 @@ export default function App() {
           </div>
           {showTable ? <ResponsiveYearTable rows={projection.rows} /> : null}
         </section>
-      </section>
+      </section> : null}
 
       <footer>
         <ShieldCheck size={18} />
-        <span>Projection uses assumptions and estimates. Confirm CPF LIFE payouts with CPF's official estimator when giving formal advice.</span>
+        <span>This educational projection uses assumptions and estimates. It does not recommend financial products. Confirm personalised CPF LIFE payouts with CPF Board's official estimator.</span>
       </footer>
     </main>
   );
