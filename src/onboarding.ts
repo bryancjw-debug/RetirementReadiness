@@ -14,9 +14,13 @@ import type {
 export type SpendingPath = "known" | "guided" | null;
 export type GuidedLifestyle = "Essential" | "Comfortable" | "More flexibility";
 export type SpendingBasis = "individual" | "household";
-export type ContributionApproach = "cash" | "invest" | "both" | "occasional" | "none" | null;
+export type ContributionApproach = "cash" | "invest" | "both" | "none" | null;
+export type ContributionCadence = "monthly" | "occasional";
+export type RetirementIncomePreference = "income" | "growth";
 
 export interface OnboardingAnswers {
+  retirementTopUp: RetirementInputs["retirementTopUp"];
+  insuranceEstimate: RetirementInputs["insuranceEstimate"];
   preferredName: string;
   currentAge: number;
   retirementAge: number;
@@ -27,6 +31,7 @@ export interface OnboardingAnswers {
   currentCashSavings: number;
   currentInvestments: number;
   contributionApproach: ContributionApproach;
+  contributionCadence: ContributionCadence;
   monthlyCashContribution: number;
   monthlyInvestmentContribution: number;
   includeCpf: boolean;
@@ -35,6 +40,11 @@ export interface OnboardingAnswers {
   cpfPrRateType: CpfPrRateType;
   cpfWorkStatus: CpfWorkStatus;
   grossMonthlyIncome: number;
+  selfEmployedNetTradeIncomeAnnual: number;
+  selfEmployedVoluntaryCpfAnnual: number;
+  cpfOaHousingMonthly: number;
+  cpfOaHousingEndAge: number;
+  cpfMaMedicalPremiumAnnual: number;
   cpfOa: number;
   cpfSa: number;
   cpfMa: number;
@@ -53,6 +63,8 @@ export interface OnboardingAnswers {
   cashInterestRate: number;
   preRetirementInvestmentReturnRate: number;
   retirementReturnRate: number;
+  passiveIncomeYieldRate: number;
+  retirementIncomePreference: RetirementIncomePreference;
   annualContributionIncreaseRate: number;
 }
 
@@ -84,6 +96,8 @@ export const guidedLifestyleOptions: Array<{
 
 export function createInitialOnboardingAnswers(inputs: RetirementInputs): OnboardingAnswers {
   return {
+    retirementTopUp: inputs.retirementTopUp ? { ...inputs.retirementTopUp } : undefined,
+    insuranceEstimate: inputs.insuranceEstimate ? { ...inputs.insuranceEstimate } : undefined,
     preferredName: "",
     currentAge: inputs.currentAge,
     retirementAge: inputs.retirementAge,
@@ -94,6 +108,7 @@ export function createInitialOnboardingAnswers(inputs: RetirementInputs): Onboar
     currentCashSavings: inputs.currentCashSavings,
     currentInvestments: inputs.currentInvestments,
     contributionApproach: null,
+    contributionCadence: "monthly",
     monthlyCashContribution: inputs.cashSavingsContribution,
     monthlyInvestmentContribution: inputs.investmentContribution,
     includeCpf: inputs.includeCpf,
@@ -102,6 +117,11 @@ export function createInitialOnboardingAnswers(inputs: RetirementInputs): Onboar
     cpfPrRateType: inputs.cpfPrRateType,
     cpfWorkStatus: inputs.cpfWorkStatus === "Not contributing" ? "Employed" : inputs.cpfWorkStatus,
     grossMonthlyIncome: inputs.grossMonthlyIncome,
+    selfEmployedNetTradeIncomeAnnual: inputs.selfEmployedNetTradeIncomeAnnual || inputs.grossMonthlyIncome * 12 || 0,
+    selfEmployedVoluntaryCpfAnnual: inputs.selfEmployedVoluntaryCpfAnnual ?? 0,
+    cpfOaHousingMonthly: inputs.cpfOaHousingMonthly ?? 0,
+    cpfOaHousingEndAge: inputs.cpfOaHousingEndAge ?? inputs.retirementAge,
+    cpfMaMedicalPremiumAnnual: inputs.cpfMaMedicalPremiumAnnual ?? 0,
     cpfOa: inputs.cpfOa,
     cpfSa: inputs.currentAge >= 55 ? 0 : inputs.cpfSa,
     cpfMa: inputs.cpfMa,
@@ -120,6 +140,8 @@ export function createInitialOnboardingAnswers(inputs: RetirementInputs): Onboar
     cashInterestRate: inputs.cashInterestRate,
     preRetirementInvestmentReturnRate: inputs.preRetirementInvestmentReturnRate,
     retirementReturnRate: inputs.retirementReturnRate,
+    passiveIncomeYieldRate: inputs.passiveIncomeYieldRate ?? 4,
+    retirementIncomePreference: inputs.retirementIncomeMethod === "drawdown" ? "growth" : "income",
     annualContributionIncreaseRate: inputs.annualContributionIncreaseRate
   };
 }
@@ -137,10 +159,11 @@ export function onboardingAnswersToRetirementInputs(
   const retirementAge = Math.max(answers.currentAge + 1, answers.retirementAge);
   const usesCash = answers.contributionApproach === "cash" || answers.contributionApproach === "both";
   const usesInvestments = answers.contributionApproach === "invest" || answers.contributionApproach === "both";
-  const occasional = answers.contributionApproach === "occasional";
 
   return {
     ...existingDefaults,
+    retirementTopUp: answers.retirementTopUp,
+    insuranceEstimate: answers.insuranceEstimate,
     currentAge: answers.currentAge,
     retirementAge,
     retirementLifestylePreset: lifestylePreset(answers),
@@ -148,13 +171,15 @@ export function onboardingAnswersToRetirementInputs(
     currentCashSavings: Math.max(0, answers.currentCashSavings),
     currentInvestments: Math.max(0, answers.currentInvestments),
     contributionFrequency: "monthly",
-    cashSavingsContribution: usesCash || occasional ? Math.max(0, answers.monthlyCashContribution) : 0,
-    investmentContribution: usesInvestments || occasional ? Math.max(0, answers.monthlyInvestmentContribution) : 0,
+    cashSavingsContribution: usesCash ? Math.max(0, answers.monthlyCashContribution) : 0,
+    investmentContribution: usesInvestments ? Math.max(0, answers.monthlyInvestmentContribution) : 0,
     endAge: Math.max(answers.endAge, retirementAge + 1),
     retirementSpendingInflationRate: answers.retirementSpendingInflationRate,
     cashInterestRate: answers.cashInterestRate,
     preRetirementInvestmentReturnRate: answers.preRetirementInvestmentReturnRate,
     retirementReturnRate: answers.retirementReturnRate,
+    passiveIncomeYieldRate: answers.passiveIncomeYieldRate,
+    retirementIncomeMethod: answers.retirementIncomePreference === "income" ? "passive" : "drawdown",
     annualContributionIncreaseRate: answers.annualContributionIncreaseRate,
     customIncomeStreams: answers.includeOtherIncome ? answers.customIncomeStreams.map((stream) => ({ ...stream })) : [],
     includeCpf: answers.includeCpf,
@@ -162,11 +187,22 @@ export function onboardingAnswersToRetirementInputs(
     cpfPrYear: answers.cpfPrYear,
     cpfPrRateType: answers.cpfPrRateType,
     cpfWorkStatus: answers.includeCpf ? answers.cpfWorkStatus : "Not contributing",
-    grossMonthlyIncome: answers.includeCpf && answers.cpfWorkStatus !== "Not contributing" ? answers.grossMonthlyIncome : 0,
+    grossMonthlyIncome: answers.includeCpf && answers.cpfWorkStatus !== "Not contributing"
+      ? (answers.cpfWorkStatus === "Self-employed" ? answers.selfEmployedNetTradeIncomeAnnual / 12 : answers.grossMonthlyIncome)
+      : 0,
+    selfEmployedNetTradeIncomeAnnual: answers.includeCpf && answers.cpfWorkStatus === "Self-employed"
+      ? answers.selfEmployedNetTradeIncomeAnnual
+      : 0,
+    selfEmployedVoluntaryCpfAnnual: answers.includeCpf && answers.cpfWorkStatus === "Self-employed"
+      ? answers.selfEmployedVoluntaryCpfAnnual
+      : 0,
     cpfOa: answers.includeCpf ? answers.cpfOa : 0,
     cpfSa: answers.includeCpf && answers.currentAge < 55 ? answers.cpfSa : 0,
     cpfMa: answers.includeCpf ? answers.cpfMa : 0,
     cpfRa: answers.includeCpf && answers.currentAge >= 55 ? answers.cpfRa : 0,
+    cpfOaHousingMonthly: answers.includeCpf ? answers.cpfOaHousingMonthly : 0,
+    cpfOaHousingEndAge: answers.includeCpf ? answers.cpfOaHousingEndAge : answers.currentAge,
+    cpfMaMedicalPremiumAnnual: answers.includeCpf ? answers.cpfMaMedicalPremiumAnnual : 0,
     cpfLifeStartAge: answers.cpfLifeStartAge,
     cpfRetirementSum: answers.cpfRetirementSum,
     cpfLifePlan: answers.cpfLifePlan,

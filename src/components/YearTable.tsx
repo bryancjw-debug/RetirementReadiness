@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { RetirementYear } from "../types";
 import { formatCurrency } from "../utils/formatters";
 
-type TablePreset = "Overview" | "Income And SRS" | "CPF" | "Drawdowns";
+type TablePreset = "Overview" | "Income And SRS" | "CPF" | "Insurance" | "Drawdowns";
 
 type Column = {
   key: string;
@@ -46,8 +46,18 @@ const columnsByPreset: Record<TablePreset, Column[]> = {
     { key: "ra", label: "CPF RA", value: (row) => money(row.cpfRa) },
     { key: "reserve", label: "CPF LIFE Reserve", value: (row) => money(row.cpfLifeReserve) },
     { key: "contribution", label: "CPF Contribution", value: (row) => money(row.cpfTotalContribution) },
+    { key: "topup", label: "Retirement Cash Top-up", value: (row) => money(row.cpfRetirementTopUp) },
+    { key: "topup-unfilled", label: "Top-up Not Funded / Capped", value: (row) => money(row.cpfRetirementTopUpUnfilled) },
     { key: "housing", label: "OA Housing Use", value: (row) => money(row.cpfOaHousingUsage) },
     { key: "medical", label: "MA Premiums", value: (row) => money(row.cpfMaMedicalPremium) }
+  ],
+  Insurance: [
+    { key: "age", label: "Age", value: (row) => String(row.age) },
+    { key: "total", label: "Total Annual Premium", value: (row) => money(row.insurancePremiumTotal) },
+    { key: "ma-paid", label: "Paid From MediSave", value: (row) => money(row.cpfMaMedicalPremium) },
+    { key: "cash", label: "Cash Premium Required", value: (row) => money(row.insuranceCashPremium) },
+    { key: "ma", label: "Ending MediSave", value: (row) => money(row.cpfMa) },
+    { key: "housing-cash", label: "Mortgage Cash Remainder", value: (row) => money(row.housingCashPayment) }
   ],
   Drawdowns: [
     { key: "age", label: "Age", value: (row) => String(row.age) },
@@ -100,7 +110,9 @@ export function YearTable({ rows }: { rows: RetirementYear[] }) {
       </div>
 
       <p className="year-data-note">
-        Values are annual flows or end-of-year balances. SRS tax is an estimate based on 50% of a qualifying withdrawal being taxable and assumes no other taxable income.
+        {preset === "Insurance" ? "Premiums are annual estimates, split between actual MediSave use and the cash amount required. Cash premiums and any mortgage remainder are included in spending; if assets cannot cover them they become an unfunded shortfall. Balances are year-end values."
+          : preset === "CPF" ? "Balances are at year end. Contributions exclude the separately shown retirement cash top-up. Top-ups are limited by cash and estimated FRS/ERS headroom; unfilled amounts are not credited. Annual timing and existing RA principal are approximations, not CPF account statements."
+          : "Values are annual flows or end-of-year balances. SRS tax is an estimate based on 50% of a qualifying withdrawal being taxable and assumes no other taxable income."}
       </p>
 
       <div className="table-wrap">

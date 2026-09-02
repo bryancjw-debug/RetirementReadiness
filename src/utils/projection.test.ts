@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultInputs, projectRetirement } from "./projection";
+import { defaultInputs, projectRetirement, selfEmployedMandatoryMedisave } from "./projection";
 
 describe("projectRetirement", () => {
   it("projects every age from current age to end age", () => {
@@ -613,7 +613,7 @@ describe("projectRetirement", () => {
     expect(retirementYear.shortfall).toBe(0);
   });
 
-  it("uses remaining CPF SA before OA when cash and investments are exhausted", () => {
+  it("does not unlock CPF OA or SA for ordinary spending before age 55", () => {
     const projection = projectRetirement({
       ...defaultInputs,
       currentAge: 50,
@@ -634,9 +634,10 @@ describe("projectRetirement", () => {
     });
 
     const retirementYear = projection.rows.find((row) => row.age === 51)!;
-    expect(retirementYear.cpfSaDrawdown).toBeGreaterThan(40_000);
-    expect(retirementYear.cpfOaDrawdown).toBeCloseTo(retirementYear.spendingNeed - retirementYear.cpfSaDrawdown, 0);
-    expect(retirementYear.shortfall).toBe(0);
+    expect(retirementYear.cpfSaDrawdown).toBe(0);
+    expect(retirementYear.cpfOaDrawdown).toBe(0);
+    expect(retirementYear.cpfLifeIncome).toBe(0);
+    expect(retirementYear.shortfall).toBe(retirementYear.spendingNeed);
   });
 
   it("does not use CPF MediSave as retirement drawdown funding", () => {
@@ -767,6 +768,54 @@ describe("projectRetirement", () => {
     expect(age66.cpfTotalContribution).toBeGreaterThan(0);
     expect(age66.cpfOaContribution).toBeGreaterThan(0);
     expect(age66.cpfMaContribution).toBeGreaterThan(0);
+  });
+
+  it("does not count a dividend stream for the capital-growth drawdown method", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 65,
+      retirementAge: 65,
+      endAge: 66,
+      currentInvestments: 500_000,
+      passiveIncomeYieldRate: 4,
+      retirementIncomeMethod: "drawdown",
+      includeCpf: false
+    });
+
+    const retirementYear = projection.rows.find((row) => row.phase === "retirement")!;
+    expect(retirementYear.passiveIncomeGenerated).toBe(0);
+    expect(retirementYear.withdrawal).toBeGreaterThan(0);
+  });
+
+  it("uses the official 2026 self-employed MediSave schedule and NTI ceiling", () => {
+    expect(selfEmployedMandatoryMedisave(35, 72_000)).toBe(6_480);
+    expect(selfEmployedMandatoryMedisave(45, 12_000)).toBe(600);
+    expect(selfEmployedMandatoryMedisave(45, 15_000)).toBe(1_200);
+    expect(selfEmployedMandatoryMedisave(45, 200_000)).toBe(9_600);
+  });
+
+  it("allocates voluntary self-employed CPF across accounts within the Annual Limit", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 35,
+      retirementAge: 36,
+      endAge: 35,
+      includeCpf: true,
+      cpfWorkStatus: "Self-employed",
+      grossMonthlyIncome: 6_000,
+      selfEmployedNetTradeIncomeAnnual: 72_000,
+      selfEmployedVoluntaryCpfAnnual: 37_740,
+      cpfOa: 0,
+      cpfSa: 0,
+      cpfMa: 0
+    });
+
+    const firstYear = projection.rows[0];
+    expect(firstYear.cpfTotalContribution).toBeCloseTo(37_740, 0);
+    expect(firstYear.cpfMaContribution).toBeGreaterThan(6_480);
+    expect(firstYear.cpfOaContribution).toBeGreaterThan(0);
+    expect(firstYear.cpfSaContribution).toBeGreaterThan(0);
+    expect(firstYear.cpfEmployerContribution).toBe(0);
   });
 
   it("uses the 2026 age-55-to-60 contribution rate for someone still working", () => {

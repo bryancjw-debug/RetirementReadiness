@@ -1,18 +1,22 @@
 import type { RetirementInputs } from "../types";
 import type { HouseholdPersonPlan, HouseholdPlan } from "../household";
 import {
-  bhsForYear,
+  accrueLockedSaInterest,
+  applyMedisaveCap,
+  formRaIfNeeded,
+  startCpfLifeIfNeeded,
+  routeRetirementAllocation,
+  retirementTopUpForYear,
   type CpfState,
   cpfContributionForYear,
   createInitialCpfState,
   cpfInterest,
   cpfLifeAnnual,
   estimateSrsWithdrawalTax,
-  projectionYear,
-  retirementSumsForYear,
   sanitizeInputs,
   srsContributionCap
 } from "./projection";
+import { insuranceForYear } from "./insurance";
 
 type PersonState = {
   cpf: CpfState;
@@ -21,6 +25,12 @@ type PersonState = {
 };
 
 export interface HouseholdPersonYear {
+  cpfRetirementTopUp: number;
+  cpfRetirementTopUpUnfilled: number;
+  cpfMaMedicalPremium: number;
+  insurancePremiumTotal: number;
+  insuranceCashPremium: number;
+  housingCashPayment: number;
   id: HouseholdPersonPlan["id"];
   label: string;
   age: number;
@@ -112,13 +122,6 @@ export interface HouseholdProjection {
 const nonNegative = (value: number) => Math.max(0, Number.isFinite(value) ? value : 0);
 const rate = (value: number) => (Number.isFinite(value) ? value / 100 : 0);
 
-function targetForChoice(inputs: RetirementInputs, year: number) {
-  const sums = retirementSumsForYear(year);
-  if (inputs.cpfRetirementSum === "Basic") return sums.brs;
-  if (inputs.cpfRetirementSum === "Enhanced") return sums.ers;
-  return sums.frs;
-}
-
 function createPersonState(person: HouseholdPersonPlan): PersonState {
   const inputs = sanitizeInputs(person.inputs);
   return {
@@ -126,64 +129,6 @@ function createPersonState(person: HouseholdPersonPlan): PersonState {
     srsBalance: inputs.includeSrs ? inputs.srsCurrentBalance : 0,
     srsWithdrawalBase: 0
   };
-}
-
-function routeRetirementAllocation(inputs: RetirementInputs, state: CpfState, age: number, amount: number) {
-  const value = nonNegative(amount);
-  if (!value) return;
-  if (state.lifeStarted) {
-    state.oa += value;
-    return;
-  }
-  if (age < 55) {
-    state.sa += value;
-    return;
-  }
-  const target = targetForChoice(inputs, projectionYear(inputs, age));
-  const toRa = Math.min(value, Math.max(0, target - state.ra));
-  state.ra += toRa;
-  state.oa += value - toRa;
-}
-
-function applyMedisaveCap(inputs: RetirementInputs, state: CpfState, age: number) {
-  const cap = bhsForYear(projectionYear(inputs, age >= 65 ? 65 : age));
-  if (state.ma <= cap) return;
-  const overflow = state.ma - cap;
-  state.ma = cap;
-  routeRetirementAllocation(inputs, state, age, overflow);
-}
-
-function formRa(inputs: RetirementInputs, state: CpfState, age: number) {
-  if (!inputs.includeCpf || state.raFormed || age < 55) return;
-  const target = targetForChoice(inputs, projectionYear(inputs, age));
-  let needed = Math.max(0, target - state.ra);
-  const fromSa = Math.min(state.sa, needed);
-  state.sa -= fromSa;
-  state.ra += fromSa;
-  needed -= fromSa;
-  const fromOa = Math.min(state.oa, needed);
-  state.oa -= fromOa;
-  state.ra += fromOa;
-  state.oa += state.sa;
-  state.sa = 0;
-  const ers = retirementSumsForYear(projectionYear(inputs, age)).ers;
-  const optionalTransfer = Math.min(state.oa, inputs.cpfOaToRaTransferAt55, Math.max(0, ers - state.ra));
-  state.oa -= optionalTransfer;
-  state.ra += optionalTransfer;
-  state.raFormed = true;
-}
-
-function startCpfLife(inputs: RetirementInputs, state: CpfState, age: number) {
-  if (!inputs.includeCpf || state.lifeStarted || age < inputs.cpfLifeStartAge) return;
-  state.lifeStarted = true;
-  state.lifeBase = Math.max(state.ra, 0);
-  state.lifeReserve = state.lifeBase;
-  if (inputs.cpfLifePlan === "Basic") {
-    state.ra *= 0.85;
-    state.lifeReserve = state.ra;
-  } else {
-    state.ra = 0;
-  }
 }
 
 function srsForYear(inputs: RetirementInputs, state: PersonState, age: number) {
@@ -304,8 +249,8 @@ export function projectHousehold(rawPlan: HouseholdPlan): HouseholdProjection {
       const inputs = person.inputs;
       const state = states[index];
       const age = ages[index];
-      formRa(inputs, state.cpf, age);
-      startCpfLife(inputs, state.cpf, age);
+      formRaIfNeeded(inputs, state.cpf, age);
+      startCpfLifeIfNeeded(inputs, state.cpf, age);
       const cpfContribution = inputs.includeCpf
         ? cpfContributionForYear(inputs, age)
         : { oa: 0, sa: 0, ma: 0, ra: 0, total: 0, employee: 0, employer: 0 };
@@ -313,12 +258,12 @@ export function projectHousehold(rawPlan: HouseholdPlan): HouseholdProjection {
       state.cpf.ma += cpfContribution.ma;
       routeRetirementAllocation(inputs, state.cpf, age, cpfContribution.sa + cpfContribution.ra);
       applyMedisaveCap(inputs, state.cpf, age);
-      if (inputs.includeCpf && age < inputs.retirementAge) {
-        state.cpf.oa -= Math.min(state.cpf.oa, inputs.cpfOaHousingMonthly * 12);
-      }
-      if (inputs.includeCpf) {
-        state.cpf.ma -= Math.min(state.cpf.ma, inputs.cpfMaMedicalPremiumAnnual);
-      }
+      const mortgage = inputs.includeCpf && age <= inputs.cpfOaHousingEndAge ? inputs.cpfOaHousingMonthly * 12 : 0;
+      const oaHousing = Math.min(state.cpf.oa, mortgage);
+      state.cpf.oa -= oaHousing;
+      const insurance = insuranceForYear(inputs, age);
+      const cpfMaMedicalPremium = Math.min(state.cpf.ma, insurance.medisaveEligible);
+      state.cpf.ma -= cpfMaMedicalPremium;
       const cpfLifeIncome = inputs.includeCpf && state.cpf.lifeStarted
         ? cpfLifeAnnual(inputs, state.cpf.lifeBase, inputs.cpfLifeStartAge, age)
         : 0;
@@ -332,6 +277,12 @@ export function projectHousehold(rawPlan: HouseholdPlan): HouseholdProjection {
         investmentContribution += annualContribution(inputs.investmentContribution, plan.annualContributionIncreaseRate, yearIndex);
       }
       personRows.push({
+        cpfRetirementTopUp: 0,
+        cpfRetirementTopUpUnfilled: 0,
+        cpfMaMedicalPremium,
+        insurancePremiumTotal: insurance.total,
+        insuranceCashPremium: insurance.total - cpfMaMedicalPremium,
+        housingCashPayment: mortgage - oaHousing,
         id: person.id,
         label: person.label,
         age,
@@ -358,17 +309,30 @@ export function projectHousehold(rawPlan: HouseholdPlan): HouseholdProjection {
     });
 
     const eventTotals = householdEventTotals(plan, ages[0]);
+    const extraCashCosts = personRows.reduce((sum, row) => sum + row.insuranceCashPremium + row.housingCashPayment, 0);
+    const eligibleTopups = plan.people.map((person, index) => retirementTopUpForYear(person.inputs, { ...states[index].cpf }, ages[index], Infinity).applied);
+    const topupTotal = eligibleTopups.reduce((sum, amount) => sum + amount, 0);
+    const topupBudget = Math.min(topupTotal, Math.max(0, cash + cashContribution + eventTotals.inflow - extraCashCosts - eventTotals.outflow));
+    plan.people.forEach((person, index) => {
+      const topup = retirementTopUpForYear(person.inputs, states[index].cpf, ages[index], topupTotal > 0 ? topupBudget * eligibleTopups[index] / topupTotal : 0);
+      personRows[index].cpfRetirementTopUp = topup.applied;
+      personRows[index].cpfRetirementTopUpUnfilled = topup.unfilled;
+      const newIncome = person.inputs.includeCpf && states[index].cpf.lifeStarted
+        ? cpfLifeAnnual(person.inputs, states[index].cpf.lifeBase, person.inputs.cpfLifeStartAge, ages[index]) : 0;
+      totalCpfLifeIncome += newIncome - personRows[index].cpfLifeIncome;
+      personRows[index].cpfLifeIncome = newIncome;
+    });
     const investmentsBeforeGrowth = investments + investmentContribution;
     const investmentRate = phase === "build-up" ? plan.preRetirementInvestmentReturnRate : plan.retirementReturnRate;
     const investmentGrowth = investmentsBeforeGrowth * rate(investmentRate);
     const passiveIncome = phase === "retirement" ? investmentsBeforeGrowth * rate(plan.passiveIncomeYieldRate) : 0;
-    const householdSpending = phase === "retirement"
+    const householdSpending = (phase === "retirement"
       ? nonNegative(plan.retirementSpendingAnnual) * Math.pow(1 + rate(plan.retirementSpendingInflationRate), yearIndex)
-      : 0;
+      : 0) + extraCashCosts;
     const nonSrsIncome = passiveIncome + totalCpfLifeIncome + totalCustomIncome;
     const srsIncomeUsed = Math.min(totalSrsNetWithdrawal, Math.max(0, householdSpending + eventTotals.outflow - nonSrsIncome));
     const srsToCash = totalSrsNetWithdrawal - srsIncomeUsed;
-    const cashBeforeInterest = cash + cashContribution + srsToCash + eventTotals.inflow;
+    const cashBeforeInterest = cash + cashContribution + srsToCash + eventTotals.inflow - topupBudget;
     const savingsInterest = cashBeforeInterest * rate(plan.cashInterestRate);
     const spendingGap = Math.max(0, householdSpending + eventTotals.outflow - nonSrsIncome - srsIncomeUsed);
     const cashAvailable = cashBeforeInterest + savingsInterest;
@@ -378,7 +342,7 @@ export function projectHousehold(rawPlan: HouseholdPlan): HouseholdProjection {
     const remainingGap = Math.max(0, spendingGap - cashWithdrawal - investmentWithdrawal);
     const cpfDraw = drawCpf(plan.people, states, ages, remainingGap);
     const shortfall = Math.max(0, remainingGap - cpfDraw.total);
-    cash = Math.max(0, cashAvailable - cashWithdrawal);
+    cash = Math.max(0, cashAvailable - cashWithdrawal) + Math.max(0, nonSrsIncome - householdSpending - eventTotals.outflow);
     investments = Math.max(0, investmentsAvailable - investmentWithdrawal);
 
     personRows.forEach((personRow, index) => {
@@ -395,6 +359,7 @@ export function projectHousehold(rawPlan: HouseholdPlan): HouseholdProjection {
           }
         }
         const interest = cpfInterest(state.cpf, personRow.age, state.cpf.lifeStarted, inputs.cpfLifePlan);
+        accrueLockedSaInterest(state.cpf, interest.sa);
         state.cpf.oa += interest.oa;
         state.cpf.sa += interest.sa;
         state.cpf.ma += interest.ma;

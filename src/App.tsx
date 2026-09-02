@@ -14,6 +14,7 @@ import { BadgeCheck, Calculator, Check, CircleAlert, CircleHelp, Moon, Pencil, P
 import { YearTable as ResponsiveYearTable } from "./components/YearTable";
 import { OnboardingWizard } from "./components/OnboardingWizard";
 import { CouplePlanner } from "./components/CouplePlanner";
+import { CpfExtrasQuiz } from "./components/CpfExtrasQuiz";
 import {
   cpfContributionForYear,
   defaultInputs,
@@ -451,8 +452,19 @@ export default function App() {
       });
     }
 
+    if (inputs.includeCpf && inputs.retirementTopUp?.enabled) {
+      const paid = projection.rows.reduce((sum, row) => sum + row.cpfRetirementTopUp, 0);
+      const unfilled = projection.rows.reduce((sum, row) => sum + row.cpfRetirementTopUpUnfilled, 0);
+      insights.push({ title: unfilled > 0 ? "Some planned CPF top-ups could not be made" : "Retirement-only cash top-ups included",
+        body: `${formatCurrency(paid)} is transferred from cash to SA/RA over the projection. ${unfilled > 0 ? `${formatCurrency(unfilled)} is not credited because of cash availability or estimated top-up limits. ` : ""}These top-ups stay locked for retirement payouts; no tax refunds are assumed.`, tone: unfilled > 0 ? "warn" : "blue" });
+    }
+    if (inputs.includeCpf && inputs.insuranceEstimate?.enabled) {
+      insights.push({ title: "Insurance cash costs are included", body: "Age-based premiums reduce MediSave within withdrawal limits. The cash remainder is added to spending, including when MediSave runs out. Keep these premiums separate from your lifestyle budget. See Insurance in the year table for the split.", tone: "blue" });
+    }
+    const earlyGap = projection.rows.find(row => row.phase === "build-up" && row.shortfall > 0);
+    if (earlyGap) insights.push({ title: `Funding gap before retirement at age ${earlyGap.age}`, body: "Projected savings cannot cover some housing, insurance or event costs before retirement. Review the annual cash flows as well as the retirement readiness percentage.", tone: "warn" });
     return insights;
-  }, [cpfLifeBridgeYears, inputs, monthlyRetirementSpendingToday, projectedMonthlyRetirementSpending]);
+  }, [cpfLifeBridgeYears, inputs, projection.rows, monthlyRetirementSpendingToday, projectedMonthlyRetirementSpending]);
 
   function updateInput<K extends keyof RetirementInputs>(key: K, value: RetirementInputs[K]) {
     setInputs((current) => ({ ...current, [key]: value }));
@@ -765,20 +777,14 @@ export default function App() {
                   <NumberField label="CPF RA" helper="Leave as 0 if you are below 55 and RA has not formed." prefix="$" value={inputs.cpfRa} onChange={(value) => updateInput("cpfRa", value)} />
                 </div>
                 <div className="field-grid">
-                  <NumberField
-                    label="CPF OA Used For Housing Monthly"
-                    helper="Simple estimate for downpayment/loan instalments paid from OA before retirement."
+                   <NumberField
+                     label="CPF OA Used For Housing Monthly"
+                     helper="Simple estimate for loan instalments paid from OA."
                     prefix="$"
                     value={inputs.cpfOaHousingMonthly}
-                    onChange={(value) => updateInput("cpfOaHousingMonthly", value)}
-                  />
-                  <NumberField
-                    label="CPF MA Medical Premiums Yearly"
-                    helper="Estimate MediShield Life, Integrated Shield, CareShield, or other MediSave-paid premiums."
-                    prefix="$"
-                    value={inputs.cpfMaMedicalPremiumAnnual}
-                    onChange={(value) => updateInput("cpfMaMedicalPremiumAnnual", value)}
-                  />
+                     onChange={(value) => updateInput("cpfOaHousingMonthly", value)}
+                   />
+                   <NumberField label="OA Housing Deductions End Age" helper="Expected age when OA-funded mortgage payments stop." value={inputs.cpfOaHousingEndAge} onChange={(value) => updateInput("cpfOaHousingEndAge", value)} />
                 </div>
                 <div className="divider" />
                 <ToggleRow
@@ -798,7 +804,7 @@ export default function App() {
                         options={["Employed", "Self-employed", "Not contributing"]}
                         onChange={(value) => updateInput("cpfWorkStatus", value)}
                       />
-                      <NumberField label="Gross Monthly Income" prefix="$" value={inputs.grossMonthlyIncome} onChange={(value) => updateInput("grossMonthlyIncome", value)} />
+                      {inputs.cpfWorkStatus === "Employed" ? <NumberField label="Gross Monthly Income" prefix="$" value={inputs.grossMonthlyIncome} onChange={(value) => updateInput("grossMonthlyIncome", value)} /> : null}
                       <SelectField<CpfResidencyStatus>
                         label="CPF Residency"
                         value={inputs.cpfResidency}
@@ -807,7 +813,7 @@ export default function App() {
                       />
                       <NumberField label="Income Growth" suffix="%" step={0.1} value={inputs.incomeGrowthRate} onChange={(value) => updateInput("incomeGrowthRate", value)} />
                     </div>
-                    {inputs.cpfResidency === "Permanent Resident" ? (
+                    {inputs.cpfResidency === "Permanent Resident" && inputs.cpfWorkStatus === "Employed" ? (
                       <div className="field-grid">
                         <SelectField<CpfPrYear>
                           label="PR CPF Year"
@@ -824,23 +830,22 @@ export default function App() {
                       </div>
                     ) : null}
                     {inputs.cpfWorkStatus === "Self-employed" ? (
-                      <NumberField
-                        label="Annual MediSave Override"
-                        helper="Optional. Leave as 0 to estimate mandatory self-employed MediSave."
-                        prefix="$"
-                        value={inputs.selfEmployedAnnualMedisaveOverride}
-                        onChange={(value) => updateInput("selfEmployedAnnualMedisaveOverride", value)}
-                      />
+                      <div className="field-grid">
+                        <NumberField label="Annual Net Trade Income" helper="Use NTI assessed by IRAS. Mandatory MediSave is based on age and annual NTI." prefix="$" value={inputs.selfEmployedNetTradeIncomeAnnual} onChange={(value) => updateInput("selfEmployedNetTradeIncomeAnnual", value)} />
+                        <NumberField label="Optional Annual CPF Top-up" helper="Voluntary top-up to all three CPF accounts, capped by the remaining $37,740 CPF Annual Limit." prefix="$" value={inputs.selfEmployedVoluntaryCpfAnnual} onChange={(value) => updateInput("selfEmployedVoluntaryCpfAnnual", value)} />
+                        <NumberField label="Annual MediSave Override" helper="Optional. Leave at 0 to use the official age and NTI-based estimate." prefix="$" value={inputs.selfEmployedAnnualMedisaveOverride} onChange={(value) => updateInput("selfEmployedAnnualMedisaveOverride", value)} />
+                      </div>
                     ) : null}
                     <div className="mini-metrics">
                       <MetricCard label="Annual Income" value={formatCurrency(inputs.grossMonthlyIncome * 12)} note="Before CPF contribution" tone="blue" />
-                      <MetricCard label="Your CPF Portion" value={formatCurrency(cpfPreview.employee)} note={inputs.cpfWorkStatus === "Self-employed" ? "MediSave only" : "Employee contribution"} />
+                       <MetricCard label="Your CPF Portion" value={formatCurrency(cpfPreview.employee)} note={inputs.cpfWorkStatus === "Self-employed" ? "Mandatory MediSave plus optional top-up" : "Employee contribution"} />
                       <MetricCard label="Employer CPF" value={formatCurrency(cpfPreview.employer)} note={inputs.cpfWorkStatus === "Self-employed" ? "Not applicable" : "Estimated employer portion"} />
                     </div>
                   </>
                 ) : (
                   <p className="helper-note">No active-income CPF will be added. Existing CPF balances and CPF LIFE can still be projected below.</p>
                 )}
+                <CpfExtrasQuiz value={inputs} onChange={(patch) => setInputs((current) => ({ ...current, ...patch }))} />
               </>
             ) : null}
           </Section>
@@ -1062,8 +1067,8 @@ export default function App() {
                 <SelectField<RetirementIncomeMethod>
                   label="Drawdown Style"
                   value={inputs.retirementIncomeMethod}
-                  options={["passive", "fixed", "dynamic"]}
-                  labels={{ passive: "Use income first", fixed: "Fixed annual withdrawal", dynamic: "Percentage withdrawal" }}
+                  options={["passive", "drawdown", "fixed", "dynamic"]}
+                  labels={{ passive: "Dividend income first", drawdown: "Capital growth and drawdown", fixed: "Fixed annual withdrawal", dynamic: "Percentage withdrawal" }}
                   onChange={(value) => updateInput("retirementIncomeMethod", value)}
                 />
                 {inputs.retirementIncomeMethod === "fixed" ? (

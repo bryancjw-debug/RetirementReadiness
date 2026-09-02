@@ -11,6 +11,8 @@ import type {
   RetirementSumChoice
 } from "../types";
 import { formatCurrency } from "../utils/formatters";
+import { selfEmployedMandatoryMedisave } from "../utils/projection";
+import { CpfExtrasQuiz } from "./CpfExtrasQuiz";
 import {
   createInitialOnboardingAnswers,
   guidedLifestyleOptions,
@@ -163,11 +165,20 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
   const [answers, setAnswers] = useState<OnboardingAnswers>(() => createInitialOnboardingAnswers(initialInputs));
   const [addCpfBalances, setAddCpfBalances] = useState(() => initialInputs.currentAge >= 55 || initialInputs.cpfOa + initialInputs.cpfSa + initialInputs.cpfMa + initialInputs.cpfRa > 0);
   const [refineCpf, setRefineCpf] = useState(false);
+  const [usesCpfForHousing, setUsesCpfForHousing] = useState(() => initialInputs.cpfOaHousingMonthly > 0);
 
   const yearsUntilRetirement = Math.max(0, answers.retirementAge - answers.currentAge);
   const projectedMonthlySpending = useMemo(
     () => answers.monthlySpendingToday * Math.pow(1 + answers.retirementSpendingInflationRate / 100, yearsUntilRetirement),
     [answers.monthlySpendingToday, answers.retirementSpendingInflationRate, yearsUntilRetirement]
+  );
+  const mandatoryMedisavePreview = useMemo(
+    () => selfEmployedMandatoryMedisave(answers.currentAge, answers.selfEmployedNetTradeIncomeAnnual),
+    [answers.currentAge, answers.selfEmployedNetTradeIncomeAnnual]
+  );
+  const voluntaryCpfPreview = Math.min(
+    Math.max(0, answers.selfEmployedVoluntaryCpfAnnual),
+    Math.max(0, 37_740 - mandatoryMedisavePreview)
   );
 
   function update<K extends keyof OnboardingAnswers>(key: K, value: OnboardingAnswers[K]) {
@@ -180,6 +191,7 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
       currentAge: value,
       retirementAge: Math.max(value + 1, current.retirementAge),
       cpfLifeStartAge: Math.max(current.cpfLifeStartAge, Math.min(70, value)),
+      cpfOaHousingEndAge: Math.max(value, current.cpfOaHousingEndAge),
       cpfSa: value >= 55 ? 0 : current.cpfSa,
       cpfRa: value < 55 ? 0 : current.cpfRa
     }));
@@ -435,19 +447,31 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
 
       {step === 4 ? (
         <QuestionStep eyebrow="Building towards tomorrow" title="How are you currently building towards retirement?" intro="This records what you are doing today. It does not suggest that one approach is better for you.">
-          <div className="quiz-choice-grid quiz-choice-grid--three">
-            <ChoiceCard compact title="Setting aside cash" selected={answers.contributionApproach === "cash"} onClick={() => chooseContributionApproach("cash")} />
-            <ChoiceCard compact title="Investing regularly" selected={answers.contributionApproach === "invest"} onClick={() => chooseContributionApproach("invest")} />
-            <ChoiceCard compact title="Doing both" selected={answers.contributionApproach === "both"} onClick={() => chooseContributionApproach("both")} />
-            <ChoiceCard compact title="Contributing occasionally" selected={answers.contributionApproach === "occasional"} onClick={() => chooseContributionApproach("occasional")} />
-            <ChoiceCard compact title="Not currently contributing" selected={answers.contributionApproach === "none"} onClick={() => chooseContributionApproach("none")} />
+          <div className="quiz-choice-grid quiz-choice-grid--two">
+            <ChoiceCard title="Yes, I am adding money" description="Tell us where it goes and use a monthly average if the amount varies." selected={answers.contributionApproach !== null && answers.contributionApproach !== "none"} onClick={() => chooseContributionApproach(answers.contributionApproach && answers.contributionApproach !== "none" ? answers.contributionApproach : "both")} />
+            <ChoiceCard title="Not at the moment" description="Test what your current resources may support without future additions." selected={answers.contributionApproach === "none"} onClick={() => chooseContributionApproach("none")} />
           </div>
           {answers.contributionApproach && answers.contributionApproach !== "none" ? (
             <div className="quiz-stack quiz-subsection">
+              <div>
+                <span className="quiz-subsection__label">Where does the money usually go?</span>
+                <div className="quiz-choice-grid quiz-choice-grid--three">
+                  <ChoiceCard compact title="Cash savings" selected={answers.contributionApproach === "cash"} onClick={() => chooseContributionApproach("cash")} />
+                  <ChoiceCard compact title="Investments" selected={answers.contributionApproach === "invest"} onClick={() => chooseContributionApproach("invest")} />
+                  <ChoiceCard compact title="A mix of both" selected={answers.contributionApproach === "both"} onClick={() => chooseContributionApproach("both")} />
+                </div>
+              </div>
+              <div>
+                <span className="quiz-subsection__label">How regular are these additions?</span>
+                <div className="segmented-choice">
+                  <button type="button" className={answers.contributionCadence === "monthly" ? "is-selected" : ""} onClick={() => update("contributionCadence", "monthly")}>Most months</button>
+                  <button type="button" className={answers.contributionCadence === "occasional" ? "is-selected" : ""} onClick={() => update("contributionCadence", "occasional")}>Occasional or uneven</button>
+                </div>
+              </div>
               {answers.contributionApproach !== "invest" ? (
                 <SliderQuestion
-                  label={answers.contributionApproach === "occasional" ? "Average monthly cash amount" : "Monthly cash amount"}
-                  helper="Use a rough monthly average if the amount changes."
+                  label={answers.contributionCadence === "occasional" ? "Average monthly cash amount" : "Monthly cash amount"}
+                  helper={answers.contributionCadence === "occasional" ? "Convert irregular deposits into a rough monthly average." : "Amount normally added to cash savings each month."}
                   value={answers.monthlyCashContribution}
                   min={0}
                   max={5_000}
@@ -459,8 +483,8 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
               ) : null}
               {answers.contributionApproach !== "cash" ? (
                 <SliderQuestion
-                  label={answers.contributionApproach === "occasional" ? "Average monthly investment amount" : "Monthly investment amount"}
-                  helper="Use a rough monthly average if contributions are irregular."
+                  label={answers.contributionCadence === "occasional" ? "Average monthly investment amount" : "Monthly investment amount"}
+                  helper={answers.contributionCadence === "occasional" ? "Convert irregular investments into a rough monthly average." : "Amount normally invested each month."}
                   value={answers.monthlyInvestmentContribution}
                   min={0}
                   max={10_000}
@@ -499,8 +523,38 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
                 {(["Employed", "Self-employed", "Not contributing"] as CpfWorkStatus[]).map((option) => <ChoiceCard compact key={option} title={option} selected={answers.cpfWorkStatus === option} onClick={() => update("cpfWorkStatus", option)} />)}
               </div>
             </div>
-            {answers.cpfWorkStatus !== "Not contributing" ? <SliderQuestion label="Gross monthly income" helper="Used only to estimate future CPF contributions up to your retirement age, subject to CPF wage limits." value={answers.grossMonthlyIncome} min={0} max={20_000} step={250} onChange={(value) => update("grossMonthlyIncome", value)} format={(value) => `${formatCurrency(value)}/mo`} quickValues={[3_000, 5_000, 8_000, 12_000]} /> : null}
-            {answers.cpfResidency === "Permanent Resident" ? <div className="cpf-pr-grid">
+            {answers.cpfWorkStatus === "Employed" ? <SliderQuestion label="Gross monthly income" helper="Used to estimate employee and employer CPF contributions up to retirement, subject to CPF wage and annual limits." value={answers.grossMonthlyIncome} min={0} max={20_000} step={250} onChange={(value) => update("grossMonthlyIncome", value)} format={(value) => `${formatCurrency(value)}/mo`} quickValues={[3_000, 5_000, 8_000, 12_000]} /> : null}
+            {answers.cpfWorkStatus === "Self-employed" ? <div className="quiz-stack self-employed-cpf-panel">
+              <SliderQuestion
+                label="Annual Net Trade Income declared to IRAS"
+                helper="Use the NTI on your Notice of Assessment, excluding platform-work earnings already contributed through an operator. Mandatory MediSave is based on this annual figure, not a monthly employee CPF rate."
+                value={answers.selfEmployedNetTradeIncomeAnnual}
+                min={0}
+                max={200_000}
+                step={1_000}
+                onChange={(value) => update("selfEmployedNetTradeIncomeAnnual", value)}
+                format={(value) => `${formatCurrency(value)}/year`}
+                quickValues={[6_000, 18_000, 48_000, 72_000, 96_000]}
+              />
+              <div className="cpf-estimate-strip" aria-live="polite">
+                <div><span>Estimated mandatory MediSave</span><strong>{formatCurrency(mandatoryMedisavePreview)}/year</strong></div>
+                <div><span>Remaining CPF Annual Limit</span><strong>{formatCurrency(Math.max(0, 37_740 - mandatoryMedisavePreview))}</strong></div>
+              </div>
+              <p className="range-disclosure">CPF Board uses age as at 1 January. This quick projection uses your current age as a proxy; use the official calculator or the detailed override if you crossed an age band this year.</p>
+              <SliderQuestion
+                label="Optional yearly CPF top-up to all three accounts"
+                helper="Optional cash top-up to OA, SA/RA and MA. The model caps it at the remaining CPF Annual Limit after mandatory MediSave. Do not also count this amount in the cash-saving question."
+                value={answers.selfEmployedVoluntaryCpfAnnual}
+                min={0}
+                max={37_740}
+                step={500}
+                onChange={(value) => update("selfEmployedVoluntaryCpfAnnual", value)}
+                format={(value) => `${formatCurrency(value)}/year`}
+                quickValues={[0, 6_000, 12_000, 24_000, 37_740]}
+              />
+              {answers.selfEmployedVoluntaryCpfAnnual > voluntaryCpfPreview ? <p className="range-disclosure">Only {formatCurrency(voluntaryCpfPreview)} fits within the projected Annual Limit after mandatory MediSave; the excess is not counted.</p> : null}
+            </div> : null}
+            {answers.cpfResidency === "Permanent Resident" && answers.cpfWorkStatus === "Employed" ? <div className="cpf-pr-grid">
               <label><span>Current PR contribution year</span><select value={answers.cpfPrYear} onChange={(event) => update("cpfPrYear", event.target.value as CpfPrYear)}>{(["First Year", "Second Year", "Third Year Or Later"] as CpfPrYear[]).map((option) => <option key={option}>{option}</option>)}</select></label>
               <label><span>Contribution arrangement</span><select value={answers.cpfPrRateType} onChange={(event) => update("cpfPrRateType", event.target.value as CpfPrRateType)}>{(["Graduated Employer And Employee", "Full Employer And Graduated Employee", "Full Employer And Employee"] as CpfPrRateType[]).map((option) => <option key={option}>{option}</option>)}</select></label>
             </div> : null}
@@ -514,6 +568,15 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
               {answers.currentAge < 55 ? <SliderQuestion label="CPF SA" helper="Your current Special Account balance. The model forms RA at age 55." value={answers.cpfSa} min={0} max={500_000} step={5_000} onChange={(value) => update("cpfSa", value)} format={(value) => formatCurrency(value, { compact: value >= 100_000 })} quickValues={[0, 25_000, 50_000, 100_000, 250_000]} /> : <SliderQuestion label="CPF RA" helper="At age 55 or above, enter your current Retirement Account balance." value={answers.cpfRa} min={0} max={700_000} step={5_000} onChange={(value) => update("cpfRa", value)} format={(value) => formatCurrency(value, { compact: value >= 100_000 })} quickValues={[0, 50_000, 110_000, 220_000, 440_000]} />}
               <SliderQuestion label="CPF MA" helper="Shown separately and not treated as general retirement spending money." value={answers.cpfMa} min={0} max={150_000} step={5_000} onChange={(value) => update("cpfMa", value)} format={(value) => formatCurrency(value, { compact: value >= 100_000 })} quickValues={[0, 25_000, 50_000, 79_000]} />
             </div> : null}
+            <div className="optional-question-block">
+              <span className="quiz-subsection__label">Do you use CPF OA for a home loan?</span>
+              <div className="segmented-choice"><button type="button" className={usesCpfForHousing ? "is-selected" : ""} onClick={() => setUsesCpfForHousing(true)}>Yes</button><button type="button" className={!usesCpfForHousing ? "is-selected" : ""} onClick={() => { setUsesCpfForHousing(false); update("cpfOaHousingMonthly", 0); }}>No</button></div>
+              {usesCpfForHousing ? <div className="quiz-stack quiz-subsection">
+                <SliderQuestion label="Monthly OA used for mortgage" helper="The model deducts this from available OA. Any mortgage paid fully in cash should not be entered here." value={answers.cpfOaHousingMonthly} min={0} max={8_000} step={100} onChange={(value) => update("cpfOaHousingMonthly", value)} format={(value) => `${formatCurrency(value)}/month`} quickValues={[500, 1_000, 1_500, 2_500, 4_000]} />
+                <SliderQuestion label="OA mortgage deductions end" helper="Use the expected loan payoff age, even if it is after retirement." value={answers.cpfOaHousingEndAge} min={answers.currentAge} max={answers.endAge} step={1} onChange={(value) => update("cpfOaHousingEndAge", value)} format={(value) => `Age ${value}`} quickValues={[55, 60, 65, 70]} />
+              </div> : null}
+            </div>
+            <CpfExtrasQuiz value={answers} onChange={(patch) => setAnswers((current) => ({ ...current, ...patch }))} />
             <div className="education-callout"><CircleHelp size={19} /><p>{answers.currentAge >= 55 ? "Your Special Account is already closed, so this path asks for OA, RA and MA. If you are still working, age-banded contributions continue until your chosen retirement age." : "At age 55, the model forms your Retirement Account and closes the Special Account. CPF LIFE income is then estimated separately from your chosen payout age."}</p></div>
             <SliderQuestion label="CPF LIFE payout start" helper="Choose an age from 65 to 70. This does not have to match your retirement age." value={Math.max(Math.min(70, answers.currentAge), answers.cpfLifeStartAge)} min={Math.min(70, Math.max(65, answers.currentAge))} max={70} step={1} onChange={(value) => update("cpfLifeStartAge", value)} format={(value) => `Age ${value}`} quickValues={[65, 67, 70]} />
             <div className="optional-question-block"><span className="quiz-subsection__label">Fine-tune CPF LIFE assumptions?</span><div className="segmented-choice"><button type="button" className={!refineCpf ? "is-selected" : ""} onClick={() => setRefineCpf(false)}>Keep Standard defaults</button><button type="button" className={refineCpf ? "is-selected" : ""} onClick={() => setRefineCpf(true)}>Fine tune</button></div></div>
@@ -561,7 +624,15 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
       ) : null}
 
       {step === 7 ? (
-        <QuestionStep eyebrow="Optional refinement" title="Would you like to adjust the planning assumptions?" intro="Most people can keep the starting assumptions. Adjust them only if you understand what each rate changes.">
+        <QuestionStep eyebrow="Optional refinement" title="How should your investments support retirement?" intro="Choose the role you expect the portfolio to play. This changes how investment income is shown in the projection.">
+          <div className="quiz-choice-grid quiz-choice-grid--two">
+            <ChoiceCard title="Dividend income first" description="Count dividends or distributions as retirement income, then draw down assets only for any remaining spending gap." selected={answers.retirementIncomePreference === "income"} onClick={() => update("retirementIncomePreference", "income")} />
+            <ChoiceCard title="Capital growth and drawdown" description="Do not assume a separate dividend income stream. Sell or withdraw investments as spending requires." selected={answers.retirementIncomePreference === "growth"} onClick={() => update("retirementIncomePreference", "growth")} />
+          </div>
+          {answers.retirementIncomePreference === "income" ? <div className="quiz-subsection">
+            <SliderQuestion label="Expected dividend or distribution yield" helper="Annual cash income from the retirement portfolio. Keep this separate from capital growth to avoid counting the same return twice." value={answers.passiveIncomeYieldRate} min={0} max={8} step={0.25} onChange={(value) => update("passiveIncomeYieldRate", value)} format={(value) => `${value.toFixed(2)}%`} quickValues={[2, 3, 4, 5]} />
+          </div> : <div className="education-callout"><CircleHelp size={19} /><p>The projection will show investment withdrawals instead of dividends. The retirement investment-return assumption still controls portfolio growth.</p></div>}
+          <div className="quiz-subsection"><span className="quiz-subsection__label">Would you like to refine the other assumptions?</span></div>
           <div className="quiz-choice-grid quiz-choice-grid--two">
             <ChoiceCard title="Keep the starting assumptions" description={`Inflation ${answers.retirementSpendingInflationRate}% · investments ${answers.preRetirementInvestmentReturnRate}% before retirement.`} selected={!answers.refineAssumptions} onClick={() => update("refineAssumptions", false)} />
             <ChoiceCard title="Let me refine them" description="Explore rates and the projection horizon without changing the calculation method." selected={answers.refineAssumptions} onClick={() => update("refineAssumptions", true)} />
@@ -601,7 +672,9 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
               <small>{formatCurrency(answers.monthlyCashContribution)} cash · {formatCurrency(answers.monthlyInvestmentContribution)} invested</small>
             </article>
             <article><span>CPF & CPF LIFE</span><strong>{answers.includeCpf ? "Included" : "Excluded by choice"}</strong><small>{answers.includeCpf ? `${formatCurrency(answers.cpfOa + answers.cpfSa + answers.cpfMa + answers.cpfRa)} current CPF · payout from age ${answers.cpfLifeStartAge}` : "No CPF balances, contributions or payouts counted"}</small></article>
+            {answers.includeCpf ? <article><span>CPF top-ups and premiums</span><strong>{answers.retirementTopUp?.enabled ? `${formatCurrency(answers.retirementTopUp.annualAmount)}/year retirement top-up` : "No retirement-only cash top-ups"}</strong><small>{answers.insuranceEstimate?.enabled ? "Age-based insurance estimate included; cash premiums are additional expenses" : "No new insurance estimate"}</small></article> : null}
             <article><span>Events and other income</span><strong>{answers.includeOneTimeEvents ? "1 event included" : "No event"} · {answers.includeOtherIncome ? "1 income included" : "No extra income"}</strong><small>{answers.oneTimeEvents[0]?.certainty === "possible" ? "Possible event is included—compare without it later" : "Only selected items affect the projection"}</small></article>
+            <article><span>Retirement investment income</span><strong>{answers.retirementIncomePreference === "income" ? "Dividend income first" : "Capital growth and drawdown"}</strong><small>{answers.retirementIncomePreference === "income" ? `${answers.passiveIncomeYieldRate.toFixed(2)}% dividend or distribution yield` : "No separate dividend income assumed"}</small></article>
             <article><span>Planning assumptions</span><strong>{answers.retirementSpendingInflationRate}% inflation · {answers.preRetirementInvestmentReturnRate}% investment return</strong><small>{answers.refineAssumptions ? "Refined during the quiz" : "Starting assumptions retained"}</small></article>
           </div>
           <div className="assumption-note">

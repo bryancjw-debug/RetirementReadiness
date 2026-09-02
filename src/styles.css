@@ -1,3 +1,29 @@
+.cpf-extras { min-width: 0; }
+.cpf-extras section { border-top: 1px solid var(--line); padding-top: 24px; }
+.cpf-extras h3 { font-size: 1.15rem; line-height: 1.45; margin: 0 0 10px; }
+.cpf-question-note { color: var(--muted); line-height: 1.65; font-size: 0.95rem; margin: 8px 0 16px; }
+.cpf-answer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 20px; }
+.cpf-answer-grid > *, .cpf-extras .quiz-text-field { min-width: 0; }
+.cpf-extras input { width: 100%; box-sizing: border-box; min-height: 48px; }
+.cpf-extras .quiz-text-field small { color: var(--muted); line-height: 1.5; }
+.cpf-question-group { border: 0; padding: 0; margin: 0; min-width: 0; }
+.cpf-question-group legend { font-size: 1rem; font-weight: 650; margin-bottom: 12px; }
+.cpf-help { margin-top: 16px; font-size: 0.95rem; line-height: 1.65; }
+.cpf-help summary { display: flex; gap: 10px; align-items: center; min-height: 44px; cursor: pointer; font-weight: 650; color: var(--text); }
+.cpf-help summary svg { flex-shrink: 0; }
+.cpf-help > div { padding: 12px 0; color: var(--muted); }
+.cpf-help a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.cpf-premium-preview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 0; padding: 18px 0; border-block: 1px solid var(--line); }
+.cpf-premium-preview dt { font-size: 0.9rem; color: var(--muted); line-height: 1.5; }
+.cpf-premium-preview dd { font-size: 1.25rem; font-weight: 700; margin: 8px 0 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.cpf-extras :focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+@media (max-width: 600px) {
+  .cpf-premium-preview { grid-template-columns: 1fr; }
+  .cpf-premium-preview > div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+  .cpf-premium-preview dd { flex-shrink: 0; font-size: 1.1rem; }
+  .cpf-extras .quiz-choice-grid { grid-template-columns: 1fr; }
+}
+
 :root {
   color-scheme: light;
   font-family:
@@ -2183,6 +2209,41 @@ footer svg {
   gap: 12px;
 }
 
+.self-employed-cpf-panel {
+  padding: clamp(17px, 3vw, 24px);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--surface-soft) 90%, var(--accent) 10%);
+}
+
+.cpf-estimate-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cpf-estimate-strip > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.cpf-estimate-strip span {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.cpf-estimate-strip strong {
+  color: var(--text);
+  font-size: clamp(1rem, 2vw, 1.2rem);
+  overflow-wrap: anywhere;
+}
+
 .cpf-pr-grid label {
   display: grid;
   gap: 8px;
@@ -2537,6 +2598,10 @@ footer svg {
   .couple-person-grid,
   .cpf-balance-grid,
   .cpf-pr-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cpf-estimate-strip {
     grid-template-columns: 1fr;
   }
 

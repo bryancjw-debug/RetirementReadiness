@@ -1,6 +1,6 @@
 export type SavingsFrequency = "monthly" | "yearly";
 
-export type RetirementIncomeMethod = "passive" | "fixed" | "dynamic";
+export type RetirementIncomeMethod = "passive" | "drawdown" | "fixed" | "dynamic";
 
 export type RetirementLifestylePreset = "Essential" | "Comfortable" | "Luxurious" | "Custom";
 
@@ -50,6 +50,8 @@ export interface OneTimeFinancialEvent {
 }
 
 export interface RetirementInputs {
+  retirementTopUp?: { enabled: boolean; annualAmount: number; startAge: number; endAge: number };
+  insuranceEstimate?: InsuranceEstimate;
   currentAge: number;
   retirementAge: number;
   endAge: number;
@@ -73,12 +75,15 @@ export interface RetirementInputs {
   cpfPrRateType: CpfPrRateType;
   grossMonthlyIncome: number;
   incomeGrowthRate: number;
+  selfEmployedNetTradeIncomeAnnual: number;
+  selfEmployedVoluntaryCpfAnnual: number;
   selfEmployedAnnualMedisaveOverride: number;
   cpfOa: number;
   cpfSa: number;
   cpfMa: number;
   cpfRa: number;
   cpfOaHousingMonthly: number;
+  cpfOaHousingEndAge: number;
   cpfMaMedicalPremiumAnnual: number;
   cpfOaToRaTransferAt55: number;
   cpfLifeStartAge: number;
@@ -109,6 +114,11 @@ export interface RetirementInputs {
 }
 
 export interface RetirementYear {
+  cpfRetirementTopUp: number;
+  cpfRetirementTopUpUnfilled: number;
+  insurancePremiumTotal: number;
+  insuranceCashPremium: number;
+  housingCashPayment: number;
   age: number;
   yearIndex: number;
   phase: "build-up" | "retirement";
@@ -164,6 +174,20 @@ export interface RetirementYear {
   selectedCpfRetirementSum: number;
   endingBalance: number;
   funded: boolean;
+}
+
+export interface InsuranceEstimate {
+  enabled: boolean;
+  hospitalCover: "none" | "medishield" | "integrated";
+  privatePremiumAnnual: number;
+  premiumGrowthRate: number;
+  careShield: boolean;
+  careShieldPremiumAnnual: number;
+  careShieldJoinAge: number;
+  careShieldGrowthRate: number;
+  supplement: boolean;
+  supplementPremiumAnnual: number;
+  supplementEndAge: number;
 }
 
 export interface RetirementSummary {

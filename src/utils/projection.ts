@@ -12,6 +12,7 @@ import type {
   RetirementSummary,
   RetirementYear
 } from "../types";
+import { insuranceDefaults, insuranceForYear, normalizeInsurance } from "./insurance";
 
 export const CURRENT_POLICY_YEAR = 2026;
 const CPF_ANNUAL_CAP_2026 = 37_740;
@@ -23,6 +24,8 @@ const clampNonNegative = (value: number) => Math.max(0, Number.isFinite(value) ?
 const percentToRate = (value: number) => (Number.isFinite(value) ? value / 100 : 0);
 
 export const defaultInputs: RetirementInputs = {
+  retirementTopUp: { enabled: false, annualAmount: 8_000, startAge: 30, endAge: 64 },
+  insuranceEstimate: { ...insuranceDefaults },
   currentAge: 30,
   retirementAge: 65,
   endAge: 100,
@@ -46,12 +49,15 @@ export const defaultInputs: RetirementInputs = {
   cpfPrRateType: "Full Employer And Employee",
   grossMonthlyIncome: 0,
   incomeGrowthRate: 0,
+  selfEmployedNetTradeIncomeAnnual: 0,
+  selfEmployedVoluntaryCpfAnnual: 0,
   selfEmployedAnnualMedisaveOverride: 0,
   cpfOa: 0,
   cpfSa: 0,
   cpfMa: 0,
   cpfRa: 0,
   cpfOaHousingMonthly: 0,
+  cpfOaHousingEndAge: 65,
   cpfMaMedicalPremiumAnnual: 0,
   cpfOaToRaTransferAt55: 0,
   cpfLifeStartAge: 65,
@@ -277,37 +283,77 @@ function monthlyCpfAmount(monthlyWage: number, rate: CpfContributionRate) {
   return { total: monthlyWage * rate.total, employee: monthlyWage * rate.employee };
 }
 
-function selfEmployedMedisaveRate(age: number, annualIncome: number) {
-  if (annualIncome <= 6_000) return 0;
-  const maxRate = age < 35 ? 0.08 : age < 45 ? 0.09 : age < 50 ? 0.10 : 0.105;
-  const lowRate = maxRate / 2;
-  if (annualIncome <= 12_000) return lowRate;
-  if (annualIncome <= 18_000) {
-    const t = (annualIncome - 12_000) / 6_000;
-    return lowRate + (maxRate - lowRate) * t;
-  }
-  return maxRate;
+export function selfEmployedMandatoryMedisave(age: number, netTradeIncome: number) {
+  const nti = clampNonNegative(netTradeIncome);
+  if (nti <= 6_000) return 0;
+
+  const band = age < 35
+    ? { lowRate: 0.04, phaseRate: 0.16, maxRate: 0.08, maximum: 7_680 }
+    : age < 45
+      ? { lowRate: 0.045, phaseRate: 0.18, maxRate: 0.09, maximum: 8_640 }
+      : age < 50
+        ? { lowRate: 0.05, phaseRate: 0.20, maxRate: 0.10, maximum: 9_600 }
+        : { lowRate: 0.0525, phaseRate: 0.21, maxRate: 0.105, maximum: 10_080 };
+
+  if (nti <= 12_000) return nti * band.lowRate;
+  if (nti <= 18_000) return 12_000 * band.lowRate + (nti - 12_000) * band.phaseRate;
+  return Math.min(nti * band.maxRate, band.maximum);
 }
 
 export function activeIncomeAnnual(inputs: RetirementInputs, age: number) {
   if (!inputs.includeCpf || inputs.cpfWorkStatus === "Not contributing" || age >= inputs.retirementAge) return 0;
   const yearsFromStart = Math.max(0, age - inputs.currentAge);
-  return clampNonNegative(inputs.grossMonthlyIncome) * 12 * Math.pow(1 + percentToRate(inputs.incomeGrowthRate), yearsFromStart);
+  const startingAnnualIncome = inputs.cpfWorkStatus === "Self-employed"
+    ? clampNonNegative(inputs.selfEmployedNetTradeIncomeAnnual) || clampNonNegative(inputs.grossMonthlyIncome) * 12
+    : clampNonNegative(inputs.grossMonthlyIncome) * 12;
+  return startingAnnualIncome * Math.pow(1 + percentToRate(inputs.incomeGrowthRate), yearsFromStart);
 }
 
 export function cpfContributionForYear(inputs: RetirementInputs, age: number): CpfContribution {
   const annualIncome = activeIncomeAnnual(inputs, age);
-  if (!annualIncome) return { oa: 0, sa: 0, ma: 0, ra: 0, total: 0, employee: 0, employer: 0 };
+  if (!inputs.includeCpf || inputs.cpfWorkStatus === "Not contributing" || age >= inputs.retirementAge) return { oa: 0, sa: 0, ma: 0, ra: 0, total: 0, employee: 0, employer: 0 };
 
   if (inputs.cpfWorkStatus === "Self-employed") {
-    const estimated = annualIncome * selfEmployedMedisaveRate(age, annualIncome);
-    const ma = Math.min(
-      clampNonNegative(inputs.selfEmployedAnnualMedisaveOverride) || estimated,
+    const yearsFromStart = Math.max(0, age - inputs.currentAge);
+    const startingNti = clampNonNegative(inputs.selfEmployedNetTradeIncomeAnnual);
+    const declaredNti = startingNti > 0
+      ? startingNti * Math.pow(1 + percentToRate(inputs.incomeGrowthRate), yearsFromStart)
+      : annualIncome;
+    const mandatoryMa = Math.min(
+      clampNonNegative(inputs.selfEmployedAnnualMedisaveOverride)
+        || selfEmployedMandatoryMedisave(age, declaredNti),
       CPF_ANNUAL_CAP_2026
     );
-    return { oa: 0, sa: 0, ma, ra: 0, total: ma, employee: ma, employer: 0 };
+    const voluntaryTotal = Math.min(
+      clampNonNegative(inputs.selfEmployedVoluntaryCpfAnnual),
+      Math.max(0, CPF_ANNUAL_CAP_2026 - mandatoryMa)
+    );
+    const allocation = cpfAllocationRates(age, projectionYear(inputs, age));
+    const voluntaryMa = voluntaryTotal * allocation.ma;
+    const voluntaryRetirement = voluntaryTotal * allocation.sa;
+    const voluntaryOa = Math.max(0, voluntaryTotal - voluntaryMa - voluntaryRetirement);
+    return age >= 55
+      ? {
+          oa: voluntaryOa,
+          sa: 0,
+          ma: mandatoryMa + voluntaryMa,
+          ra: voluntaryRetirement,
+          total: mandatoryMa + voluntaryTotal,
+          employee: mandatoryMa + voluntaryTotal,
+          employer: 0
+        }
+      : {
+          oa: voluntaryOa,
+          sa: voluntaryRetirement,
+          ma: mandatoryMa + voluntaryMa,
+          ra: 0,
+          total: mandatoryMa + voluntaryTotal,
+          employee: mandatoryMa + voluntaryTotal,
+          employer: 0
+        };
   }
 
+  if (!annualIncome) return { oa: 0, sa: 0, ma: 0, ra: 0, total: 0, employee: 0, employer: 0 };
   const year = projectionYear(inputs, age);
   const prYear = inputs.cpfResidency === "Permanent Resident"
     ? progressedCpfPrYear(inputs.cpfPrYear, Math.max(0, age - inputs.currentAge))
@@ -407,6 +453,8 @@ export function cpfInterest(cpf: CpfState, age: number, lifeStarted: boolean, pl
 }
 
 export type CpfState = {
+  saLocked?: number;
+  raTopupBasis?: number;
   oa: number;
   sa: number;
   ma: number;
@@ -443,6 +491,8 @@ export function createInitialCpfState(inputs: RetirementInputs): CpfState {
     sa,
     ma: clampNonNegative(inputs.cpfMa),
     ra,
+    saLocked: 0,
+    raTopupBasis: ra,
     lifeReserve: 0,
     lifeBase: 0,
     raFormed,
@@ -492,11 +542,18 @@ export function sanitizeInputs(inputs: RetirementInputs): RetirementInputs {
   const lumpSumAge = Math.min(Math.max(currentAge, Math.floor(clampNonNegative(inputs.lumpSumAge))), endAge);
   const cpfLifeStartAge = Math.min(
     Math.max(65, Math.floor(clampNonNegative(inputs.cpfLifeStartAge))),
-    endAge
+    70
   );
 
   return {
     ...inputs,
+    retirementTopUp: {
+      enabled: Boolean(inputs.retirementTopUp?.enabled),
+      annualAmount: clampNonNegative(inputs.retirementTopUp?.annualAmount ?? 8_000),
+      startAge: Math.max(currentAge, Math.floor(clampNonNegative(inputs.retirementTopUp?.startAge ?? currentAge))),
+      endAge: Math.min(endAge, Math.floor(clampNonNegative(inputs.retirementTopUp?.endAge ?? retirementAge - 1)))
+    },
+    insuranceEstimate: normalizeInsurance(inputs.insuranceEstimate),
     currentAge,
     retirementAge,
     endAge,
@@ -523,12 +580,15 @@ export function sanitizeInputs(inputs: RetirementInputs): RetirementInputs {
     cpfPrRateType: inputs.cpfPrRateType ?? "Full Employer And Employee",
     grossMonthlyIncome: clampNonNegative(inputs.grossMonthlyIncome),
     incomeGrowthRate: Number.isFinite(inputs.incomeGrowthRate) ? inputs.incomeGrowthRate : 0,
+    selfEmployedNetTradeIncomeAnnual: clampNonNegative(inputs.selfEmployedNetTradeIncomeAnnual),
+    selfEmployedVoluntaryCpfAnnual: clampNonNegative(inputs.selfEmployedVoluntaryCpfAnnual),
     selfEmployedAnnualMedisaveOverride: clampNonNegative(inputs.selfEmployedAnnualMedisaveOverride),
     cpfOa: clampNonNegative(inputs.cpfOa),
     cpfSa: clampNonNegative(inputs.cpfSa),
     cpfMa: clampNonNegative(inputs.cpfMa),
     cpfRa: clampNonNegative(inputs.cpfRa),
     cpfOaHousingMonthly: clampNonNegative(inputs.cpfOaHousingMonthly),
+    cpfOaHousingEndAge: Math.min(endAge, Math.max(currentAge, Math.floor(clampNonNegative(inputs.cpfOaHousingEndAge ?? inputs.retirementAge)))),
     cpfMaMedicalPremiumAnnual: clampNonNegative(inputs.cpfMaMedicalPremiumAnnual),
     cpfOaToRaTransferAt55: clampNonNegative(inputs.cpfOaToRaTransferAt55),
     cpfLifeMonthlyOverride: clampNonNegative(inputs.cpfLifeMonthlyOverride),
@@ -681,10 +741,15 @@ function monthlySpendingReductionRequired(inputs: RetirementInputs, rows: Retire
   return spendingFactor > 0 ? totalShortfall / spendingFactor : 0;
 }
 
-function formRaIfNeeded(inputs: RetirementInputs, cpf: CpfState, age: number) {
+export function formRaIfNeeded(inputs: RetirementInputs, cpf: CpfState, age: number) {
   if (!inputs.includeCpf || cpf.raFormed || age < 55) return 0;
 
   const year = projectionYear(inputs, age);
+  // RSTU top-ups and their attributed interest never become withdrawable OA.
+  const locked = Math.min(cpf.sa, cpf.saLocked ?? 0);
+  cpf.sa -= locked;
+  cpf.ra += locked;
+  cpf.saLocked = 0;
   const target = cpfTargetForChoice(inputs.cpfRetirementSum, year);
   let needed = Math.max(target - cpf.ra, 0);
   const fromSa = Math.min(cpf.sa, needed);
@@ -708,12 +773,13 @@ function formRaIfNeeded(inputs: RetirementInputs, cpf: CpfState, age: number) {
   );
   cpf.oa -= optionalOaTransfer;
   cpf.ra += optionalOaTransfer;
+  cpf.raTopupBasis = cpf.ra;
   cpf.raFormed = true;
 
   return fromSa + fromOa + optionalOaTransfer;
 }
 
-function startCpfLifeIfNeeded(inputs: RetirementInputs, cpf: CpfState, age: number) {
+export function startCpfLifeIfNeeded(inputs: RetirementInputs, cpf: CpfState, age: number) {
   if (!inputs.includeCpf || cpf.lifeStarted || age < inputs.cpfLifeStartAge) return;
   cpf.lifeStarted = true;
   cpf.lifeBase = Math.max(cpf.ra, 0);
@@ -726,36 +792,70 @@ function startCpfLifeIfNeeded(inputs: RetirementInputs, cpf: CpfState, age: numb
   }
 }
 
-function routeRetirementAllocation(inputs: RetirementInputs, cpf: CpfState, age: number, amount: number) {
+export function routeRetirementAllocation(inputs: RetirementInputs, cpf: CpfState, age: number, amount: number) {
   const value = clampNonNegative(amount);
   if (!value) return { toRa: 0, toOa: 0, toSa: 0 };
-
-  if (cpf.lifeStarted) {
-    cpf.oa += value;
-    return { toRa: 0, toOa: value, toSa: 0 };
-  }
 
   if (age < 55) {
     cpf.sa += value;
     return { toRa: 0, toOa: 0, toSa: value };
   }
 
-  const target = cpfTargetForChoice(inputs.cpfRetirementSum, projectionYear(inputs, age));
-  const toRa = Math.min(value, Math.max(0, target - cpf.ra));
+  const target = retirementSumsForYear(projectionYear(inputs, 55)).frs;
+  const toRa = Math.min(value, Math.max(0, target - (cpf.raTopupBasis ?? cpf.ra)));
   const toOa = value - toRa;
-  cpf.ra += toRa;
+  if (cpf.lifeStarted) {
+    cpf.lifeBase += toRa;
+    if (inputs.cpfLifePlan === "Basic") cpf.ra += toRa * 0.85;
+    else cpf.lifeReserve += toRa;
+  } else cpf.ra += toRa;
+  cpf.raTopupBasis = (cpf.raTopupBasis ?? 0) + toRa;
   cpf.oa += toOa;
   return { toRa, toOa, toSa: 0 };
 }
 
-function applyMedisaveCap(inputs: RetirementInputs, cpf: CpfState, age: number) {
+export function applyMedisaveCap(inputs: RetirementInputs, cpf: CpfState, age: number) {
   const capYear = projectionYear(inputs, age >= 65 ? 65 : age);
   const cap = bhsForYear(capYear);
   if (cpf.ma <= cap) return 0;
   const overflow = cpf.ma - cap;
   cpf.ma = cap;
-  routeRetirementAllocation(inputs, cpf, age, overflow);
+  if (age < 55) {
+    const frs = retirementSumsForYear(projectionYear(inputs, age)).frs;
+    const toSa = Math.min(overflow, Math.max(0, frs - cpf.sa));
+    cpf.sa += toSa;
+    cpf.oa += overflow - toSa;
+  } else {
+    routeRetirementAllocation(inputs, cpf, age, overflow);
+  }
   return overflow;
+}
+
+export function retirementTopUpForYear(inputs: RetirementInputs, cpf: CpfState, age: number, cashAvailable: number) {
+  const plan = inputs.retirementTopUp;
+  if (!inputs.includeCpf || !plan?.enabled || age < plan.startAge || age > plan.endAge) return { applied: 0, unfilled: 0 };
+  const sums = retirementSumsForYear(projectionYear(inputs, age));
+  const room = Math.max(0, age < 55 ? sums.frs - cpf.sa : sums.ers - (cpf.raTopupBasis ?? cpf.ra));
+  const applied = Math.min(plan.annualAmount, room, Math.max(0, cashAvailable));
+  if (age < 55) {
+    cpf.sa += applied;
+    cpf.saLocked = (cpf.saLocked ?? 0) + applied;
+  } else {
+    cpf.raTopupBasis = (cpf.raTopupBasis ?? cpf.ra) + applied;
+    if (cpf.lifeStarted) {
+      // Annual approximation: new retirement inflows buy additional LIFE income.
+      cpf.lifeBase += applied;
+      if (inputs.cpfLifePlan === "Basic") cpf.ra += applied * 0.85;
+      else cpf.lifeReserve += applied;
+    } else cpf.ra += applied;
+  }
+  return { applied, unfilled: Math.max(0, plan.annualAmount - applied) };
+}
+
+export function accrueLockedSaInterest(cpf: CpfState, saInterest: number) {
+  if (cpf.sa > 0 && (cpf.saLocked ?? 0) > 0) {
+    cpf.saLocked = Math.min(cpf.sa + saInterest, (cpf.saLocked ?? 0) * (1 + saInterest / cpf.sa));
+  }
 }
 
 export function projectRetirement(rawInputs: RetirementInputs): RetirementProjection {
@@ -802,14 +902,19 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     cpf.ma += cpfContribution.ma;
     routeRetirementAllocation(inputs, cpf, age, cpfContribution.sa + cpfContribution.ra);
     const contributionMedisaveOverflow = inputs.includeCpf ? applyMedisaveCap(inputs, cpf, age) : 0;
-    const cpfOaHousingUsage = inputs.includeCpf && age < inputs.retirementAge
+    const cpfOaHousingUsage = inputs.includeCpf && age <= inputs.cpfOaHousingEndAge
       ? Math.min(cpf.oa, inputs.cpfOaHousingMonthly * 12)
       : 0;
     cpf.oa -= cpfOaHousingUsage;
-    const cpfMaMedicalPremium = inputs.includeCpf
-      ? Math.min(cpf.ma, inputs.cpfMaMedicalPremiumAnnual)
-      : 0;
+    const housingCashPayment = inputs.includeCpf && age <= inputs.cpfOaHousingEndAge
+      ? Math.max(0, inputs.cpfOaHousingMonthly * 12 - cpfOaHousingUsage) : 0;
+    const insurance = insuranceForYear(inputs, age);
+    const cpfMaMedicalPremium = Math.min(cpf.ma, insurance.medisaveEligible);
     cpf.ma -= cpfMaMedicalPremium;
+    const insuranceCashPremium = insurance.total - cpfMaMedicalPremium;
+    const topUp = retirementTopUpForYear(inputs, cpf, age, cashBalance
+      + calculateAnnualContribution(inputs, age, inputs.cashSavingsContribution) + eventTotals.inflow
+      - insuranceCashPremium - housingCashPayment - eventTotals.outflow);
 
     const selectedCpfRetirementSum = inputs.includeCpf
       ? cpfTargetForChoice(inputs.cpfRetirementSum, projectionYear(inputs, Math.max(age, 55)))
@@ -829,12 +934,12 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       ? inputs.preRetirementInvestmentReturnRate
       : inputs.retirementReturnRate;
     const investmentGrowth = investmentsBeforeGrowth * percentToRate(investmentReturnRate);
-    const passiveIncomeGenerated = phase === "retirement"
+    const passiveIncomeGenerated = phase === "retirement" && inputs.retirementIncomeMethod === "passive"
       ? investmentsBeforeGrowth * percentToRate(inputs.passiveIncomeYieldRate)
       : 0;
     const customIncomeGenerated = phase === "retirement" ? calculateCustomIncome(inputs, age) : 0;
     const healthcareCost = calculateHealthcareCost(inputs, age);
-    const spendingNeed = calculateSpendingNeed(inputs, age) + healthcareCost;
+    const spendingNeed = calculateSpendingNeed(inputs, age) + healthcareCost + insuranceCashPremium + housingCashPayment;
     const retirementIncomeBeforeSrs = phase === "retirement"
       ? passiveIncomeGenerated + cpfLifeIncome + customIncomeGenerated
       : 0;
@@ -842,14 +947,14 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       ? Math.min(srsNetWithdrawal, Math.max(spendingNeed + eventTotals.outflow - retirementIncomeBeforeSrs, 0))
       : 0;
     const srsTransferToCash = Math.max(srsNetWithdrawal - srsIncomeUsed, 0);
-    const cashBeforeGrowth = openingCashSavings + cashContribution + eventTotals.inflow + srsTransferToCash;
+    const cashBeforeGrowth = openingCashSavings + cashContribution + eventTotals.inflow + srsTransferToCash - topUp.applied;
     const savingsInterest = cashBeforeGrowth * percentToRate(inputs.cashInterestRate);
     const retirementIncome = phase === "retirement"
       ? retirementIncomeBeforeSrs + srsIncomeUsed
       : 0;
     const desiredWithdrawal = phase === "retirement"
       ? Math.max(0, calculateWithdrawal(inputs, investableOpeningBalance, retirementIncome, spendingNeed + eventTotals.outflow, age))
-      : eventTotals.outflow;
+      : spendingNeed + eventTotals.outflow;
     const cashAvailableForWithdrawal = cashBeforeGrowth + savingsInterest;
     const investmentsAvailableForWithdrawal = investmentsBeforeGrowth + investmentGrowth;
     const cashWithdrawal = Math.min(desiredWithdrawal, cashAvailableForWithdrawal);
@@ -857,12 +962,11 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       Math.max(desiredWithdrawal - cashWithdrawal, 0),
       investmentsAvailableForWithdrawal
     );
-    const gapAfterCashAndInvestments = phase === "retirement"
-      ? Math.max(spendingNeed + eventTotals.outflow - retirementIncome - cashWithdrawal - investmentWithdrawal, 0)
-      : 0;
-    const cpfSaDrawdown = inputs.includeCpf ? Math.min(cpf.sa, gapAfterCashAndInvestments) : 0;
+    const gapAfterCashAndInvestments = Math.max(spendingNeed + eventTotals.outflow - retirementIncome - cashWithdrawal - investmentWithdrawal, 0);
+    const canDrawCpf = inputs.includeCpf && age >= 55 && phase === "retirement";
+    const cpfSaDrawdown = canDrawCpf ? Math.min(Math.max(0, cpf.sa - (cpf.saLocked ?? 0)), gapAfterCashAndInvestments) : 0;
     cpf.sa -= cpfSaDrawdown;
-    const cpfOaDrawdown = inputs.includeCpf
+    const cpfOaDrawdown = canDrawCpf
       ? Math.min(cpf.oa, Math.max(gapAfterCashAndInvestments - cpfSaDrawdown, 0))
       : 0;
     cpf.oa -= cpfOaDrawdown;
@@ -870,8 +974,9 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     const withdrawal = cashWithdrawal + investmentWithdrawal + cpfDrawdown;
     const shortfall = phase === "retirement"
       ? Math.max(spendingNeed + eventTotals.outflow - retirementIncome - withdrawal, 0)
-      : Math.max(eventTotals.outflow - withdrawal, 0);
-    const endingCashSavings = Math.max(cashAvailableForWithdrawal - cashWithdrawal, 0);
+      : Math.max(spendingNeed + eventTotals.outflow - withdrawal, 0);
+    const endingCashSavings = Math.max(cashAvailableForWithdrawal - cashWithdrawal, 0)
+      + Math.max(0, retirementIncome - spendingNeed - eventTotals.outflow);
     const endingInvestments = Math.max(investmentsAvailableForWithdrawal - investmentWithdrawal, 0);
 
     if (inputs.includeCpf) {
@@ -885,6 +990,7 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       }
 
       const interest = cpfInterest(cpf, age, cpf.lifeStarted, inputs.cpfLifePlan);
+      accrueLockedSaInterest(cpf, interest.sa);
       cpf.oa += interest.oa;
       cpf.sa += interest.sa;
       cpf.ma += interest.ma;
@@ -897,6 +1003,11 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     const endingBalance = endingCashSavings + endingInvestments + cpfTotal + srsBalance;
 
     rows.push({
+      cpfRetirementTopUp: topUp.applied,
+      cpfRetirementTopUpUnfilled: topUp.unfilled,
+      insurancePremiumTotal: insurance.total,
+      insuranceCashPremium,
+      housingCashPayment,
       age,
       yearIndex: age - inputs.currentAge,
       phase,
@@ -1012,7 +1123,7 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     )
     : 0;
   const estimatedCpfWithdrawableAt55 = inputs.includeCpf
-    ? Math.max(0, projectedCpfOaAt55 + Math.max(0, projectedCpfRaAt55 - cpfTargetForChoice(inputs.cpfRetirementSum, cpfRetirementSumYear)))
+    ? Math.max(0, projectedCpfOaAt55)
     : 0;
   const cpfRetirementSumShortfallAt55 = inputs.includeCpf
     ? Math.max(0, cpfTargetForChoice(inputs.cpfRetirementSum, cpfRetirementSumYear) - projectedCpfRetirementFundingAt55)

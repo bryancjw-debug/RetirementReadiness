@@ -129,4 +129,30 @@ describe("RetirementReadiness onboarding mapping", () => {
     expect(mapped.cpfOa).toBe(0);
     expect(mapped.cpfLifeMonthlyOverride).toBe(0);
   });
+
+  it("maps self-employed CPF, deductions, and the selected retirement-income method", () => {
+    const answers: OnboardingAnswers = {
+      ...createInitialOnboardingAnswers(defaultInputs),
+      spendingPath: "known",
+      contributionApproach: "both",
+      cpfWorkStatus: "Self-employed",
+      selfEmployedNetTradeIncomeAnnual: 72_000,
+      selfEmployedVoluntaryCpfAnnual: 12_000,
+      cpfOaHousingMonthly: 1_500,
+      cpfOaHousingEndAge: 60,
+      cpfMaMedicalPremiumAnnual: 2_000,
+      passiveIncomeYieldRate: 4.5,
+      retirementIncomePreference: "growth"
+    };
+
+    const mapped = onboardingAnswersToRetirementInputs(answers, defaultInputs);
+    expect(mapped.grossMonthlyIncome).toBe(6_000);
+    expect(mapped.selfEmployedNetTradeIncomeAnnual).toBe(72_000);
+    expect(mapped.selfEmployedVoluntaryCpfAnnual).toBe(12_000);
+    expect(mapped.cpfOaHousingMonthly).toBe(1_500);
+    expect(mapped.cpfOaHousingEndAge).toBe(60);
+    expect(mapped.cpfMaMedicalPremiumAnnual).toBe(2_000);
+    expect(mapped.passiveIncomeYieldRate).toBe(4.5);
+    expect(mapped.retirementIncomeMethod).toBe("drawdown");
+  });
 });
