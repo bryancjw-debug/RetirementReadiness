@@ -19,6 +19,7 @@ export type ContributionCadence = "monthly" | "occasional";
 export type RetirementIncomePreference = "income" | "growth";
 
 export interface OnboardingAnswers {
+  unknownBalances?: string[];
   retirementTopUp: RetirementInputs["retirementTopUp"];
   insuranceEstimate: RetirementInputs["insuranceEstimate"];
   preferredName: string;
@@ -150,6 +151,10 @@ function lifestylePreset(answers: OnboardingAnswers): RetirementLifestylePreset 
   if (answers.spendingPath === "known") return "Custom";
   if (answers.guidedLifestyle === "More flexibility") return "Luxurious";
   return answers.guidedLifestyle;
+}
+
+export function createNewOnboardingAnswers(defaults: RetirementInputs): OnboardingAnswers {
+  return { ...createInitialOnboardingAnswers(defaults), currentCashSavings: 0, currentInvestments: 0, monthlyCashContribution: 0, monthlyInvestmentContribution: 0 };
 }
 
 export function onboardingAnswersToRetirementInputs(

@@ -1,4 +1,8 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { QuizDraftControls } from "./QuizDraftControls";
+import { matchesQuizShape } from "../utils/quizDraft";
+import { QuizNumberQuestion as RangeQuestion } from "./QuizNumberQuestion";
+import { QuizProgress } from "./QuizProgress";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeft, ArrowRight, Check, CircleHelp, Landmark, Sparkles, Users } from "lucide-react";
 import type { HouseholdPersonPlan, HouseholdPlan, HouseholdResidency } from "../household";
 import { cloneHouseholdPlan } from "../household";
@@ -29,36 +33,8 @@ function ChoiceCard({ title, description, selected, onClick, compact = false }: 
   );
 }
 
-function RangeQuestion({ label, helper, value, min, max, step, onChange, quickValues, format = String }: {
-  label: string;
-  helper: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (value: number) => void;
-  quickValues?: number[];
-  format?: (value: number) => string;
-}) {
-  const id = `couple-${label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
-  const progress = ((value - min) / Math.max(1, max - min)) * 100;
-  return (
-    <div className="quiz-slider-block">
-      <div className="quiz-slider-block__header">
-        <div><label htmlFor={id}>{label}</label><p>{helper}</p></div>
-        <output>{format(value)}</output>
-      </div>
-      <input id={id} className="quiz-range" type="range" min={min} max={max} step={step} value={value} style={{ "--range-progress": `${progress}%` } as CSSProperties} onChange={(event) => onChange(Number(event.target.value))} />
-      <div className="quiz-range-labels" aria-hidden="true"><span>{format(min)}</span><span>{format(max)}{value === max ? "+" : ""}</span></div>
-      {quickValues ? <div className="quick-values" aria-label={`Quick choices for ${label}`}>
-        {[...new Set(quickValues)].filter((item) => item >= min && item <= max).map((item) => <button className={value === item ? "is-selected" : ""} type="button" key={item} onClick={() => onChange(item)}>{format(item)}</button>)}
-      </div> : null}
-    </div>
-  );
-}
-
 function Step({ eyebrow, title, intro, children }: { eyebrow: string; title: string; intro: string; children: ReactNode }) {
-  return <div className="quiz-step"><p className="eyebrow">{eyebrow}</p><h2>{title}</h2><p className="quiz-step__intro">{intro}</p>{children}</div>;
+  return <div className="quiz-step"><p className="eyebrow">{eyebrow}</p><h2 id="couple-step-title" tabIndex={-1}>{title}</h2><p className="quiz-step__intro">{intro}</p>{children}</div>;
 }
 
 const stepLabels = ["Both of you", "Timing", "Lifestyle", "Resources", "CPF", "SRS", "Events & income", "Refine", "Review"];
@@ -78,12 +54,29 @@ function personIncomeTemplate(label: string, retirementAge: number, endAge: numb
 
 export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComplete, onCancel }: CoupleOnboardingWizardProps) {
   const [step, setStep] = useState(0);
+  const [cpfPart, setCpfPart] = useState(0);
+  const cpfParts = ["Work & contributions", "Current balances", "Housing & premiums", "Top-ups & CPF LIFE"];
+  const [resourcesConfirmed, setResourcesConfirmed] = useState(editMode);
   const [activePerson, setActivePerson] = useState<0 | 1>(0);
-  const [plan, setPlan] = useState<HouseholdPlan>(() => cloneHouseholdPlan(initialPlan));
+  const [plan, setPlan] = useState<HouseholdPlan>(() => {
+    const next = cloneHouseholdPlan(initialPlan);
+    if (!editMode) {
+      next.currentCashSavings = 0;
+      next.currentInvestments = 0;
+      next.people.forEach((item) => {
+        item.inputs.cashSavingsContribution = 0;
+        item.inputs.investmentContribution = 0;
+        item.inputs.grossMonthlyIncome = 0;
+      });
+    }
+    return next;
+  });
   const [refineAdvanced, setRefineAdvanced] = useState(false);
   const [refineSrs, setRefineSrs] = useState<[boolean, boolean]>([false, false]);
   const [addCpfBalances, setAddCpfBalances] = useState<[boolean, boolean]>(() => initialPlan.people.map((item) => item.inputs.currentAge >= 55 || item.inputs.cpfOa + item.inputs.cpfSa + item.inputs.cpfMa + item.inputs.cpfRa > 0) as [boolean, boolean]);
   const [refineCpf, setRefineCpf] = useState<[boolean, boolean]>([false, false]);
+  const draft = useMemo(() => ({ plan, step, activePerson, refineAdvanced, refineSrs, addCpfBalances, refineCpf, cpfPart, resourcesConfirmed }), [plan, step, activePerson, refineAdvanced, refineSrs, addCpfBalances, refineCpf, cpfPart, resourcesConfirmed]);
+  useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); document.getElementById("couple-step-title")?.focus({ preventScroll: true }); }, [step, cpfPart, activePerson]);
   const person = plan.people[activePerson];
   const firstRetirementOffset = Math.min(...plan.people.map((item) => item.inputs.retirementAge - item.inputs.currentAge));
   const bothRetiredOffset = Math.max(...plan.people.map((item) => item.inputs.retirementAge - item.inputs.currentAge));
@@ -164,10 +157,14 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
   }
 
   const canContinue = plan.people.every((item) => item.inputs.retirementAge > item.inputs.currentAge)
-    && plan.retirementSpendingAnnual > 0;
+    && plan.retirementSpendingAnnual > 0 && (step !== 3 || resourcesConfirmed);
 
   function next() {
     if (!canContinue) return;
+    if (step === 4) {
+      if (person.inputs.includeCpf && person.residency !== "Foreigner" && cpfPart < 3) { setCpfPart(cpfPart + 1); return; }
+      if (activePerson === 0) { setActivePerson(1); setCpfPart(0); return; }
+    }
     if (step === stepLabels.length - 1) {
       onComplete(plan);
       return;
@@ -178,6 +175,18 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
   }
 
   function back() {
+    if (step === 4 && cpfPart > 0) { setCpfPart(cpfPart - 1); return; }
+    if (step === 4 && activePerson === 1) {
+      setActivePerson(0);
+      setCpfPart(plan.people[0].inputs.includeCpf && plan.people[0].residency !== "Foreigner" ? 3 : 0);
+      return;
+    }
+    if (step === 5) {
+      setStep(4);
+      setActivePerson(1);
+      setCpfPart(plan.people[1].inputs.includeCpf && plan.people[1].residency !== "Foreigner" ? 3 : 0);
+      return;
+    }
     if (step === 0) {
       onCancel();
       return;
@@ -189,10 +198,7 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
 
   return (
     <section className="onboarding-card couple-onboarding" aria-label="Guided couple retirement setup">
-      <div className="quiz-progress">
-        <div className="quiz-progress__top"><span>Step {step + 1} of {stepLabels.length}</span><strong>{stepLabels[step]}</strong></div>
-        <div className="quiz-progress__track" aria-hidden="true"><i style={{ width: `${((step + 1) / stepLabels.length) * 100}%` }} /></div>
-      </div>
+      <QuizProgress chapter={step <= 2 ? 0 : step === 3 ? 1 : step === 4 ? 2 : step <= 7 ? 3 : 4} detail={step === 4 ? `${person.label}: ${cpfParts[cpfPart]} (${cpfPart + 1} of 4)` : stepLabels[step]} />
 
       {step === 0 ? <Step eyebrow="Planning together" title="Let’s place both of you on the same timeline." intro="Each person keeps a separate CPF and SRS journey. Names are optional and stay in this browser.">
         <div className="couple-person-grid">
@@ -247,12 +253,14 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
         <div className="person-tabs" role="tablist">{plan.people.map((item, index) => <button type="button" role="tab" aria-selected={activePerson === index} className={`${activePerson === index ? "is-active" : ""} person-tone-${index + 1}`} key={item.id} onClick={() => setActivePerson(index as 0 | 1)}>{item.label}<small>{item.inputs.includeCpf ? "CPF included" : "CPF not included"}</small></button>)}</div>
         <article className={`person-detail-card person-tone-${activePerson + 1}`}>
           <div className="person-detail-card__header"><div><span>{person.label}</span><h3>CPF assumptions</h3></div><Landmark size={24} /></div>
+          <details className="cpf-sections-index" key={cpfPart}><summary>Review CPF sections</summary><nav className="cpf-part-nav" aria-label="CPF sections">{cpfParts.map((title, index) => <button type="button" key={title} aria-current={cpfPart === index ? "step" : undefined} onClick={() => setCpfPart(index)}>{index + 1}. {title}</button>)}</nav></details>
           <div className="quiz-choice-grid quiz-choice-grid--three">
             {(["Singapore Citizen", "Permanent Resident", "Foreigner"] as HouseholdResidency[]).map((option) => <ChoiceCard compact key={option} title={option} selected={person.residency === option} onClick={() => updateResidency(activePerson, option)} />)}
           </div>
           {person.residency === "Foreigner" ? <div className="education-callout"><CircleHelp size={19} /><p>CPF is not included for this person. SRS can still be modelled separately on the next step.</p></div> : <>
             <div className="quiz-subsection"><span className="quiz-subsection__label">Include {person.label.trim().toLowerCase() === "you" ? "your" : possessiveLabel(person.label)} CPF?</span><div className="segmented-choice"><button className={person.inputs.includeCpf ? "is-selected" : ""} type="button" onClick={() => updatePersonInput(activePerson, "includeCpf", true)}>Yes</button><button className={!person.inputs.includeCpf ? "is-selected" : ""} type="button" onClick={() => updatePersonInput(activePerson, "includeCpf", false)}>Not now</button></div></div>
             {person.inputs.includeCpf ? <>
+              {cpfPart === 0 ? <>
               <div className="quiz-subsection"><span className="quiz-subsection__label">Current CPF work status</span><div className="quiz-choice-grid quiz-choice-grid--three">{(["Employed", "Self-employed", "Not contributing"] as CpfWorkStatus[]).map((option) => <ChoiceCard compact key={option} title={option} selected={person.inputs.cpfWorkStatus === option} onClick={() => updatePersonInput(activePerson, "cpfWorkStatus", option)} />)}</div></div>
               {person.inputs.cpfWorkStatus === "Employed" ? <RangeQuestion label="Gross monthly income" helper="Used to estimate this person’s employee and employer CPF contributions, subject to CPF limits." value={person.inputs.grossMonthlyIncome} min={0} max={20_000} step={250} onChange={(value) => updatePersonInput(activePerson, "grossMonthlyIncome", value)} format={(value) => `${formatCurrency(value)}/mo`} quickValues={[3_000, 5_000, 8_000, 12_000]} /> : null}
               {person.inputs.cpfWorkStatus === "Self-employed" ? <div className="quiz-stack quiz-subsection self-employed-cpf-panel">
@@ -263,10 +271,8 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
                 <label><span>Current PR contribution year</span><select value={person.inputs.cpfPrYear} onChange={(event) => updatePersonInput(activePerson, "cpfPrYear", event.target.value as CpfPrYear)}>{(["First Year", "Second Year", "Third Year Or Later"] as CpfPrYear[]).map((option) => <option key={option}>{option}</option>)}</select></label>
                 <label><span>Contribution arrangement</span><select value={person.inputs.cpfPrRateType} onChange={(event) => updatePersonInput(activePerson, "cpfPrRateType", event.target.value as CpfPrRateType)}>{(["Graduated Employer And Employee", "Full Employer And Graduated Employee", "Full Employer And Employee"] as CpfPrRateType[]).map((option) => <option key={option}>{option}</option>)}</select></label>
               </div> : null}
-              <div className="cpf-balance-grid quiz-subsection">
-                <RangeQuestion label="Monthly OA used for mortgage" helper="Enter zero if this person does not use OA for housing instalments." value={person.inputs.cpfOaHousingMonthly} min={0} max={8_000} step={100} onChange={(value) => updatePersonInput(activePerson, "cpfOaHousingMonthly", value)} format={(value) => `${formatCurrency(value)}/month`} quickValues={[0, 500, 1_000, 1_500, 2_500]} />
-                {person.inputs.cpfOaHousingMonthly > 0 ? <RangeQuestion label="OA mortgage deductions end" helper="Expected age when this person’s OA-funded loan payments stop." value={person.inputs.cpfOaHousingEndAge} min={person.inputs.currentAge} max={person.inputs.endAge} step={1} onChange={(value) => updatePersonInput(activePerson, "cpfOaHousingEndAge", value)} format={(value) => `Age ${value}`} quickValues={[55, 60, 65, 70]} /> : null}
-              </div>
+              </> : null}
+              {cpfPart === 1 ? <>
               <div className="optional-question-block quiz-subsection"><span className="quiz-subsection__label">Add {person.label.trim().toLowerCase() === "you" ? "your" : possessiveLabel(person.label)} current CPF balances?</span><div className="segmented-choice"><button type="button" className={addCpfBalances[activePerson] ? "is-selected" : ""} onClick={() => setAddCpfBalances((current) => current.map((value, index) => index === activePerson ? true : value) as [boolean, boolean])}>Add balances</button><button type="button" className={!addCpfBalances[activePerson] ? "is-selected" : ""} onClick={() => { setAddCpfBalances((current) => current.map((value, index) => index === activePerson ? false : value) as [boolean, boolean]); setPlan((current) => ({ ...current, people: current.people.map((item, index) => index === activePerson ? { ...item, inputs: { ...item.inputs, cpfOa: 0, cpfSa: 0, cpfMa: 0, cpfRa: 0 } } : item) as HouseholdPlan["people"] })); }}>Not with me now</button></div>{!addCpfBalances[activePerson] ? <small>Future contributions can still be projected. Current balances remain at zero until added.</small> : null}</div>
               {addCpfBalances[activePerson] ? <div className="cpf-balance-grid quiz-subsection">
                 <RangeQuestion label="CPF OA" helper="Current Ordinary Account balance." value={person.inputs.cpfOa} min={0} max={500_000} step={5_000} onChange={(value) => updatePersonInput(activePerson, "cpfOa", value)} format={(value) => formatCurrency(value, { compact: value >= 100_000 })} quickValues={[0, 25_000, 50_000, 100_000, 250_000]} />
@@ -275,8 +281,17 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
                   : <RangeQuestion label="CPF RA" helper="At age 55 or above, use the current Retirement Account balance." value={person.inputs.cpfRa} min={0} max={700_000} step={5_000} onChange={(value) => updatePersonInput(activePerson, "cpfRa", value)} format={(value) => formatCurrency(value, { compact: value >= 100_000 })} quickValues={[0, 50_000, 110_000, 220_000, 440_000]} />}
                 <RangeQuestion label="CPF MA" helper="Current MediSave Account balance; not treated as general retirement spending money." value={person.inputs.cpfMa} min={0} max={150_000} step={5_000} onChange={(value) => updatePersonInput(activePerson, "cpfMa", value)} format={(value) => formatCurrency(value, { compact: value >= 100_000 })} quickValues={[0, 25_000, 50_000, 79_000]} />
               </div> : null}
+              </> : null}
+              {cpfPart === 2 ? <>
+              <div className="cpf-balance-grid quiz-subsection">
+                <RangeQuestion label="Monthly OA used for mortgage" helper="Enter zero if this person does not use OA for housing instalments." value={person.inputs.cpfOaHousingMonthly} min={0} max={8_000} step={100} onChange={(value) => updatePersonInput(activePerson, "cpfOaHousingMonthly", value)} format={(value) => `${formatCurrency(value)}/month`} quickValues={[0, 500, 1_000, 1_500, 2_500]} />
+                {person.inputs.cpfOaHousingMonthly > 0 ? <RangeQuestion label="OA mortgage deductions end" helper="Expected age when this person’s OA-funded loan payments stop." value={person.inputs.cpfOaHousingEndAge} min={person.inputs.currentAge} max={person.inputs.endAge} step={1} onChange={(value) => updatePersonInput(activePerson, "cpfOaHousingEndAge", value)} format={(value) => `Age ${value}`} quickValues={[55, 60, 65, 70]} /> : null}
+              </div>
+              <CpfExtrasQuiz section="insurance" key={person.id} value={person.inputs} onChange={(patch) => updatePerson(activePerson, { inputs: { ...person.inputs, ...patch } })} />
+              </> : null}
+              {cpfPart === 3 ? <>
               <div className="education-callout"><CircleHelp size={19} /><p>{person.inputs.currentAge >= 55 ? "SA is closed for this person. OA, RA and MA are tracked from today, while age-banded contributions continue if they are still working." : "RA forms and SA closes when this person reaches age 55. Their CPF LIFE payout begins only at the selected payout age."}</p></div>
-              <CpfExtrasQuiz key={person.id} value={person.inputs} onChange={(patch) => updatePerson(activePerson, { inputs: { ...person.inputs, ...patch } })} />
+              <CpfExtrasQuiz section="topup" key={person.id} value={person.inputs} onChange={(patch) => updatePerson(activePerson, { inputs: { ...person.inputs, ...patch } })} />
               <RangeQuestion label="CPF LIFE start age" helper="Choose age 65 to 70. For someone already past 65, choose their actual or intended start age." value={Math.max(Math.min(70, person.inputs.currentAge), person.inputs.cpfLifeStartAge)} min={Math.min(70, Math.max(65, person.inputs.currentAge))} max={70} step={1} onChange={(value) => updatePersonInput(activePerson, "cpfLifeStartAge", value)} format={(value) => `Age ${value}`} quickValues={[65, 67, 70]} />
               <div className="optional-question-block quiz-subsection"><span className="quiz-subsection__label">Fine-tune {person.label.trim().toLowerCase() === "you" ? "your" : possessiveLabel(person.label)} CPF LIFE assumptions?</span><div className="segmented-choice"><button type="button" className={!refineCpf[activePerson] ? "is-selected" : ""} onClick={() => setRefineCpf((current) => current.map((value, index) => index === activePerson ? false : value) as [boolean, boolean])}>Keep Standard defaults</button><button type="button" className={refineCpf[activePerson] ? "is-selected" : ""} onClick={() => setRefineCpf((current) => current.map((value, index) => index === activePerson ? true : value) as [boolean, boolean])}>Fine tune</button></div></div>
               {refineCpf[activePerson] ? <>
@@ -288,6 +303,7 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
                 <div className="segmented-choice"><button type="button" className={person.inputs.cpfLifeMonthlyOverride <= 0 ? "is-selected" : ""} onClick={() => updatePersonInput(activePerson, "cpfLifeMonthlyOverride", 0)}>Use an estimate</button><button type="button" className={person.inputs.cpfLifeMonthlyOverride > 0 ? "is-selected" : ""} onClick={() => updatePersonInput(activePerson, "cpfLifeMonthlyOverride", Math.max(500, person.inputs.cpfLifeMonthlyOverride || 1_500))}>Use actual payout</button></div>
                 {person.inputs.cpfLifeMonthlyOverride > 0 ? <RangeQuestion label="Monthly CPF LIFE payout" helper="Use the amount in this person’s CPF records or official estimator." value={person.inputs.cpfLifeMonthlyOverride} min={100} max={6_000} step={50} onChange={(value) => updatePersonInput(activePerson, "cpfLifeMonthlyOverride", value)} format={(value) => `${formatCurrency(value)}/mo`} quickValues={[500, 1_000, 1_500, 2_500, 4_000]} /> : null}
               </div> : null}
+              </> : null}
             </> : null}
           </>}
         </article>
@@ -354,7 +370,7 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
       </Step> : null}
 
       {step === 8 ? <Step eyebrow="Review together" title="Here is the household retirement picture we’ll test." intro="Shared spending, events and non-CPF resources are counted once. CPF, SRS and other income remain attached to each person until the household result layer.">
-        <div className="review-grid">
+        <div className="review-edit-links" aria-label="Edit household answers">{stepLabels.slice(0, 8).map((label, index) => <button type="button" className="secondary-action" key={label} onClick={() => setStep(index)}>Edit {label}</button>)}</div><div className="review-grid">
           <article><span>Household lifestyle</span><strong>{formatCurrency(plan.retirementSpendingAnnual / 12)}/month today</strong><small>{formatCurrency(futureMonthlySpending)}/month when modelled spending begins</small></article>
           <article><span>Shared starting resources</span><strong>{formatCurrency(plan.currentCashSavings + plan.currentInvestments)}</strong><small>{formatCurrency(plan.currentCashSavings)} cash · {formatCurrency(plan.currentInvestments)} invested</small></article>
           <article><span>Shared event</span><strong>{plan.includeOneTimeEvents ? plan.oneTimeEvents[0]?.label ?? "Included" : "Not included"}</strong><small>{plan.oneTimeEvents[0]?.certainty === "possible" ? "Possible—compare without it later" : "Counted once at household level"}</small></article>
@@ -368,6 +384,10 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
         <div className="assumption-note"><Sparkles size={20} /><p>This focused retirement model runs until the younger person reaches age {Math.max(...plan.people.map((item) => item.inputs.endAge))}. It excludes property, insurance benefit payouts, tax optimisation, estate planning and employment income available for household spending. Optional insurance premiums are expenses, not a coverage assessment. Broader planning belongs in a tool such as Common Cents.</p></div>
       </Step> : null}
 
+      {step === 3 ? <label className="resource-confirm"><input type="checkbox" checked={resourcesConfirmed} onChange={(event) => setResourcesConfirmed(event.target.checked)} /> These are our retirement resources and contributions. Zero means none.</label> : null}
+      {!editMode ? <QuizDraftControls storageKey="couple" value={draft}
+        validate={(value): value is typeof draft => matchesQuizShape(value, draft) && (value as typeof draft).plan.people.length === 2 && [0, 1].includes((value as typeof draft).activePerson) && Number.isInteger((value as typeof draft).step) && (value as typeof draft).step >= 0 && (value as typeof draft).step < 9 && Number.isInteger((value as typeof draft).cpfPart) && (value as typeof draft).cpfPart >= 0 && (value as typeof draft).cpfPart < 4}
+        onResume={(value) => { setPlan(value.plan); setStep(value.step); setActivePerson(value.activePerson); setRefineAdvanced(value.refineAdvanced); setRefineSrs(value.refineSrs); setAddCpfBalances(value.addCpfBalances); setRefineCpf(value.refineCpf); setCpfPart(value.cpfPart); setResourcesConfirmed(value.resourcesConfirmed); }} /> : null}
       <div className="quiz-navigation"><button className="secondary-action" type="button" onClick={back}><ArrowLeft size={18} /> {step === 0 && editMode ? "Cancel" : "Back"}</button><button className="primary-action" type="button" disabled={!canContinue} onClick={next}>{step === stepLabels.length - 1 ? (editMode ? "Update household result" : "Build our projection") : "Continue"} <ArrowRight size={18} /></button></div>
     </section>
   );

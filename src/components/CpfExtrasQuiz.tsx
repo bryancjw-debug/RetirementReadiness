@@ -30,13 +30,13 @@ function Note({ title, children }: { title: string; children: ReactNode }) {
   return <details className="cpf-help"><summary><CircleHelp size={17} aria-hidden="true" />{title}</summary><div>{children}</div></details>;
 }
 
-export function CpfExtrasQuiz({ value, onChange }: { value: CpfExtrasValues; onChange: (patch: Patch) => void }) {
+export function CpfExtrasQuiz({ value, onChange, section = "all" }: { value: CpfExtrasValues; onChange: (patch: Patch) => void; section?: "all" | "insurance" | "topup" }) {
   const topUp = value.retirementTopUp ?? { enabled: false, annualAmount: 8_000, startAge: value.currentAge, endAge: value.retirementAge - 1 };
   const insurance = normalizeInsurance(value.insuranceEstimate);
   const preview = insuranceForYear(value as RetirementInputs, value.currentAge);
   function updateInsurance(patch: Partial<InsuranceEstimate>) { onChange({ insuranceEstimate: { ...insurance, ...patch } }); }
   return <div className="cpf-extras quiz-stack">
-    <section className="quiz-subsection" aria-label="Retirement CPF top-ups">
+    {section !== "insurance" ? <section className="quiz-subsection" aria-label="Retirement CPF top-ups">
       <h3>Would you like to add cash specifically for retirement income?</h3>
       <p className="cpf-question-note">Optional, for employed and self-employed members. This is separate from mandatory CPF and voluntary contributions to all three accounts.</p>
       <div className="quiz-choice-grid quiz-choice-grid--two">
@@ -63,9 +63,9 @@ export function CpfExtrasQuiz({ value, onChange }: { value: CpfExtrasValues; onC
           <a href="https://www.cpf.gov.sg/service/article/what-is-the-maximum-amount-of-top-ups-i-can-receive" target="_blank" rel="noreferrer">Top-up limits</a>{" · "}<a href="https://www.cpf.gov.sg/service/article/how-much-tax-relief-can-i-enjoy-when-i-make-cash-top-ups" target="_blank" rel="noreferrer">Tax-relief conditions</a>
         </Note>
       </div> : null}
-    </section>
+    </section> : null}
 
-    <section className="quiz-subsection" aria-label="Insurance premium estimates">
+    {section !== "topup" ? <section className="quiz-subsection" aria-label="Insurance premium estimates">
       <h3>Include a simple estimate of health-insurance premiums?</h3>
       <p className="cpf-question-note">Premiums reduce MediSave first within approved limits. The cash remainder is an additional expense, so leave it out of your lifestyle budget and enter savings before these extra deductions.</p>
       <div className="quiz-choice-grid quiz-choice-grid--two">
@@ -107,6 +107,6 @@ export function CpfExtrasQuiz({ value, onChange }: { value: CpfExtrasValues; onC
           <p>Sources checked 3 September 2026: <a href="https://www.moh.gov.sg/managing-expenses/schemes-and-subsidies/medishield-life/medishield-life-premium-and-subsidy-tables/" target="_blank" rel="noreferrer">MOH premiums</a>{" · "}<a href="https://www.cpf.gov.sg/member/healthcare-financing/careshield-life/careshield-premiums-and-subsidies" target="_blank" rel="noreferrer">CareShield Life</a>{" · "}<a href="https://www.cpf.gov.sg/member/healthcare-financing/getting-supplementary-coverage/careshield-life-eldershield-supplements" target="_blank" rel="noreferrer">Supplement limits</a></p>
         </Note>
       </div> : null}
-    </section>
+    </section> : null}
   </div>;
 }

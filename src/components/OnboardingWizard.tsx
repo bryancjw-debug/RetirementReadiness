@@ -1,4 +1,8 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { QuizDraftControls } from "./QuizDraftControls";
+import { matchesQuizShape } from "../utils/quizDraft";
+import { QuizNumberQuestion as SliderQuestion } from "./QuizNumberQuestion";
+import { QuizProgress } from "./QuizProgress";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeft, ArrowRight, Check, CircleHelp, Gauge, Sparkles } from "lucide-react";
 import type {
   CpfLifePlan,
@@ -14,7 +18,7 @@ import { formatCurrency } from "../utils/formatters";
 import { selfEmployedMandatoryMedisave } from "../utils/projection";
 import { CpfExtrasQuiz } from "./CpfExtrasQuiz";
 import {
-  createInitialOnboardingAnswers,
+  createNewOnboardingAnswers,
   guidedLifestyleOptions,
   onboardingAnswersToRetirementInputs,
   type ContributionApproach,
@@ -26,6 +30,7 @@ interface OnboardingWizardProps {
   onComplete: (inputs: RetirementInputs, answers: OnboardingAnswers) => void;
   onExploreSample: () => void;
   onPlanTogether: () => void;
+  onActiveChange?: (active: boolean) => void;
 }
 
 function ChoiceCard({
@@ -57,66 +62,45 @@ function ChoiceCard({
   );
 }
 
-function SliderQuestion({
+type ResourceChoice = "known" | "none" | "unknown";
+
+function ResourceChoiceGroup({
   label,
-  helper,
   value,
-  min,
-  max,
-  step,
-  onChange,
-  format = (next) => String(next),
-  quickValues
+  onChange
 }: {
   label: string;
-  helper: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (value: number) => void;
-  format?: (value: number) => string;
-  quickValues?: number[];
+  value: ResourceChoice | "";
+  onChange: (value: ResourceChoice) => void;
 }) {
-  const percentage = ((value - min) / Math.max(1, max - min)) * 100;
+  const choices: Array<{ value: ResourceChoice; title: string; description: string }> = [
+    { value: "known", title: "Enter amount", description: "I know roughly how much" },
+    { value: "none", title: "None", description: "No balance to include" },
+    { value: "unknown", title: "Not sure yet", description: "Leave it out for now" }
+  ];
+
   return (
-    <div className="quiz-slider-block">
-      <div className="quiz-slider-block__header">
-        <div>
-          <label htmlFor={`slider-${label.replace(/\s+/g, "-").toLowerCase()}`}>{label}</label>
-          <p>{helper}</p>
-        </div>
-        <output>{format(value)}</output>
-      </div>
-      <input
-        id={`slider-${label.replace(/\s+/g, "-").toLowerCase()}`}
-        className="quiz-range"
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        style={{ "--range-progress": `${percentage}%` } as CSSProperties}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-      <div className="quiz-range-labels" aria-hidden="true">
-        <span>{format(min)}</span>
-        <span>{format(max)}{value === max ? "+" : ""}</span>
-      </div>
-      {quickValues ? (
-        <div className="quick-values" aria-label={`Quick choices for ${label}`}>
-          {[...new Set(quickValues)].filter((quickValue) => quickValue >= min && quickValue <= max).map((quickValue) => (
-            <button
-              className={value === quickValue ? "is-selected" : ""}
-              type="button"
-              key={quickValue}
-              onClick={() => onChange(quickValue)}
-            >
-              {format(quickValue)}
-            </button>
-          ))}
-        </div>
-      ) : null}
+    <div className="resource-choice-group" role="group" aria-label={label}>
+      {choices.map((choice) => {
+        const selected = value === choice.value;
+        return (
+          <button
+            key={choice.value}
+            className={`resource-choice ${selected ? "is-selected" : ""}`}
+            type="button"
+            aria-pressed={selected}
+            onClick={() => onChange(choice.value)}
+          >
+            <span className="resource-choice__indicator" aria-hidden="true">
+              {selected ? <Check size={15} strokeWidth={2.5} /> : null}
+            </span>
+            <span>
+              <strong>{choice.title}</strong>
+              <small>{choice.description}</small>
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -125,7 +109,7 @@ function QuestionStep({ eyebrow, title, intro, children }: { eyebrow: string; ti
   return (
     <div className="quiz-step" role="group" aria-labelledby="quiz-step-title">
       <p className="eyebrow">{eyebrow}</p>
-      <h2 id="quiz-step-title">{title}</h2>
+      <h2 id="quiz-step-title" tabIndex={-1}>{title}</h2>
       <p className="quiz-step__intro">{intro}</p>
       {children}
     </div>
@@ -159,13 +143,29 @@ function incomeTemplate(label: string, retirementAge: number, endAge: number): C
   };
 }
 
-export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, onPlanTogether }: OnboardingWizardProps) {
+export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, onPlanTogether, onActiveChange }: OnboardingWizardProps) {
   const [started, setStarted] = useState(false);
   const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState<OnboardingAnswers>(() => createInitialOnboardingAnswers(initialInputs));
+  const [answers, setAnswers] = useState<OnboardingAnswers>(() => createNewOnboardingAnswers(initialInputs));
   const [addCpfBalances, setAddCpfBalances] = useState(() => initialInputs.currentAge >= 55 || initialInputs.cpfOa + initialInputs.cpfSa + initialInputs.cpfMa + initialInputs.cpfRa > 0);
   const [refineCpf, setRefineCpf] = useState(false);
   const [usesCpfForHousing, setUsesCpfForHousing] = useState(() => initialInputs.cpfOaHousingMonthly > 0);
+
+  const [cpfPart, setCpfPart] = useState(0);
+  const [resourceStatus, setResourceStatus] = useState<{ cash: ResourceChoice | ""; investments: ResourceChoice | "" }>({ cash: "", investments: "" });
+  const cpfParts = ["Work & contributions", "Current balances", "Housing & premiums", "Top-ups & CPF LIFE"];
+  const chapter = step <= 2 ? 0 : step <= 4 ? 1 : step === 5 ? 2 : step <= 7 ? 3 : 4;
+  useEffect(() => { onActiveChange?.(started); }, [started, onActiveChange]);
+  useEffect(() => {
+    if (!started) return;
+    window.scrollTo({ top: 0, behavior: "instant" });
+    document.getElementById("quiz-step-title")?.focus({ preventScroll: true });
+  }, [step, cpfPart, started]);
+  const draft = useMemo(() => ({ answers, step, cpfPart, addCpfBalances, refineCpf, usesCpfForHousing, resourceStatus }), [answers, step, cpfPart, addCpfBalances, refineCpf, usesCpfForHousing, resourceStatus]);
+  const draftControls = <QuizDraftControls storageKey="individual" value={draft} active={started}
+    validate={(data): data is typeof draft => matchesQuizShape(data, draft) && Number.isInteger((data as typeof draft).step) && (data as typeof draft).step >= 0 && (data as typeof draft).step < 9 && Number.isInteger((data as typeof draft).cpfPart) && (data as typeof draft).cpfPart >= 0 && (data as typeof draft).cpfPart < 4}
+    onResume={(data) => { setAnswers(data.answers); setStep(data.step); setCpfPart(data.cpfPart); setAddCpfBalances(data.addCpfBalances); setRefineCpf(data.refineCpf); setUsesCpfForHousing(data.usesCpfForHousing); setResourceStatus(data.resourceStatus); setStarted(true); }} />;
+  function jumpTo(index: number) { setStep(index); setCpfPart(0); }
 
   const yearsUntilRetirement = Math.max(0, answers.retirementAge - answers.currentAge);
   const projectedMonthlySpending = useMemo(
@@ -236,14 +236,18 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
       ? answers.retirementAge > answers.currentAge
       : step === 2
         ? answers.spendingPath !== null && answers.monthlySpendingToday > 0
+        : step === 3
+          ? Boolean(resourceStatus.cash && resourceStatus.investments)
         : step === 4
           ? answers.contributionApproach !== null
           : true;
 
   function next() {
     if (!canContinue) return;
+    if (step === 5 && answers.includeCpf && cpfPart < 3) { setCpfPart(cpfPart + 1); return; }
     if (step === stepLabels.length - 1) {
-      onComplete(onboardingAnswersToRetirementInputs(answers, initialInputs), answers);
+      const reviewed = { ...answers, unknownBalances: [...(resourceStatus.cash === "unknown" ? ["Cash"] : []), ...(resourceStatus.investments === "unknown" ? ["Investments"] : []), ...(answers.includeCpf && !addCpfBalances ? ["Current CPF"] : [])] };
+      onComplete(onboardingAnswersToRetirementInputs(reviewed, initialInputs), reviewed);
       return;
     }
     setStep((current) => Math.min(stepLabels.length - 1, current + 1));
@@ -251,6 +255,7 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
   }
 
   function back() {
+    if (step === 5 && answers.includeCpf && cpfPart > 0) { setCpfPart(cpfPart - 1); return; }
     if (step === 0) {
       setStarted(false);
       return;
@@ -259,24 +264,24 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  if (!started) {
-    return (
+  return <>
+    {!started ? (
       <section className="onboarding-welcome" aria-labelledby="welcome-title">
         <div className="onboarding-welcome__copy">
-          <p className="eyebrow">A guided Singapore retirement projection</p>
-          <h2 id="welcome-title">Your retirement starts with a picture of the life you want.</h2>
+          <p className="eyebrow">Your guided Singapore retirement checkup</p>
+          <h2 id="welcome-title">See how ready you are for the retirement you want.</h2>
           <p>
-            Answer a few guided questions to create an initial projection. You can explore the results first,
-            then refine every assumption when you are ready.
+            Answer one simple question at a time. We will bring your savings, investments and CPF together
+            into a retirement picture you can understand and adjust.
           </p>
           <div className="welcome-points">
-            <span><Check size={17} /> About five minutes</span>
+            <span><Check size={17} /> At your own pace</span>
             <span><Check size={17} /> Estimates are enough</span>
             <span><Check size={17} /> No product recommendations</span>
           </div>
           <div className="welcome-actions">
-            <button className="primary-action" type="button" onClick={() => setStarted(true)}>
-              Plan for myself <ArrowRight size={18} />
+            <button className="primary-action welcome-primary-action" type="button" onClick={() => setStarted(true)}>
+              Start my checkup <ArrowRight size={18} />
             </button>
             <button className="secondary-action plan-together-action" type="button" onClick={onPlanTogether}>
               Plan together <ArrowRight size={18} />
@@ -286,27 +291,27 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
             </button>
           </div>
         </div>
-        <aside className="welcome-preview" aria-label="What this check covers">
-          <Gauge size={28} />
-          <strong>A starting point, not a verdict</strong>
-          <p>The result will show what your assumptions imply, which inputs matter, and what you may want to explore next.</p>
-          <small>Your answers stay in this browser unless you choose to export them.</small>
+        <aside className="welcome-preview" aria-label="Example retirement result preview">
+          <div className="welcome-preview__top"><span>Example result</span><strong>Retirement outlook</strong></div>
+          <div className="welcome-readiness-preview">
+            <div className="welcome-readiness-ring" aria-hidden="true"><span>82%</span></div>
+            <div><small>Estimated need funded</small><strong>Your answer, at a glance</strong><p>See what is on track and what could close the gap.</p></div>
+          </div>
+          <div className="welcome-wealth-preview" aria-hidden="true">
+            {[24, 31, 39, 48, 59, 67, 76, 72, 64, 57, 51].map((height, index) => <i key={index} style={{ height: `${height}%` }} />)}
+          </div>
+          <div className="welcome-preview__facts"><span><Gauge size={17} /> CPF-aware projection</span><span>Age-by-age view</span></div>
+          <small className="welcome-preview__note">Illustrative preview. Your figures and assumptions replace these.</small>
         </aside>
+        <div className="welcome-confidence" aria-label="Planning experience details">
+          <span><Check size={16} /> Clear, guided questions</span>
+          <span><Check size={16} /> Plan alone or together</span>
+          <span><Check size={16} /> Saved only when you choose</span>
+        </div>
       </section>
-    );
-  }
-
-  return (
+    ) : (
     <section className="onboarding-card" aria-label="Guided retirement setup">
-      <div className="quiz-progress">
-        <div className="quiz-progress__top">
-          <span>Step {step + 1} of {stepLabels.length}</span>
-          <strong>{stepLabels[step]}</strong>
-        </div>
-        <div className="quiz-progress__track" aria-hidden="true">
-          <i style={{ width: `${((step + 1) / stepLabels.length) * 100}%` }} />
-        </div>
-      </div>
+      <QuizProgress chapter={chapter} detail={step === 5 && answers.includeCpf ? `${cpfParts[cpfPart]} (${cpfPart + 1} of 4)` : stepLabels[step]} />
 
       {step === 0 ? (
         <QuestionStep eyebrow="About you" title="Let’s begin with where you are today." intro="Your age determines how many years your resources may have to grow. A name is optional and is used only to personalise this experience.">
@@ -418,6 +423,12 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
       {step === 3 ? (
         <QuestionStep eyebrow="What you have today" title="What resources are already intended for your future?" intro="Include money you expect to remain available for retirement. Exclude emergency money or funds already committed to a near-term purchase.">
           <div className="quiz-stack">
+            <div className="resource-question"><h3>Cash savings</h3>
+              <ResourceChoiceGroup label="Cash balance availability" value={resourceStatus.cash} onChange={(value) => {
+                setResourceStatus((current) => ({ ...current, cash: value }));
+                if (value !== "known") update("currentCashSavings", 0);
+              }} />
+              {resourceStatus.cash === "known" ? <>
             <SliderQuestion
               label="Cash savings for long-term use"
               helper="Exclude cash already reserved for a home, renovation, or other near-term goal."
@@ -429,6 +440,14 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
               format={(value) => formatCurrency(value, { compact: value >= 100_000 })}
               quickValues={[0, 25_000, 50_000, 100_000, 250_000]}
             />
+              </> : resourceStatus.cash === "unknown" ? <p>Not entered. This balance will be excluded until you add it.</p> : null}
+            </div>
+            <div className="resource-question"><h3>Retirement investments</h3>
+              <ResourceChoiceGroup label="Investment balance availability" value={resourceStatus.investments} onChange={(value) => {
+                setResourceStatus((current) => ({ ...current, investments: value }));
+                if (value !== "known") update("currentInvestments", 0);
+              }} />
+              {resourceStatus.investments === "known" ? <>
             <SliderQuestion
               label="Investments intended for retirement"
               helper="Exclude your home unless you explicitly plan to monetise it later."
@@ -440,8 +459,10 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
               format={(value) => formatCurrency(value, { compact: value >= 100_000 })}
               quickValues={[0, 50_000, 100_000, 250_000, 500_000]}
             />
+              </> : resourceStatus.investments === "unknown" ? <p>Not entered. This balance will be excluded until you add it.</p> : null}
+            </div>
           </div>
-          <p className="range-disclosure">Amounts above these ranges can be entered later in the detailed editor.</p>
+          <p className="range-disclosure">Unknown balances are excluded, not confirmed as zero. Add them before relying on the result.</p>
         </QuestionStep>
       ) : null}
 
@@ -503,13 +524,17 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
       ) : null}
 
       {step === 5 ? (
-        <QuestionStep eyebrow="Your Singapore retirement foundation" title="Would you like CPF and CPF LIFE included?" intro="CPF is included by default because it is a central retirement resource for many Singaporeans. You remain in control and can leave it out for a separate view.">
+        <QuestionStep eyebrow="Your Singapore retirement foundation" title={cpfPart === 0 ? "Would you like CPF and CPF LIFE included?" : cpfParts[cpfPart]} intro={cpfPart === 0 ? "Include CPF balances and future contributions, or choose a separate view without CPF." : "Your earlier CPF answers are kept. You can return to any section to adjust them."}>
+          {cpfPart === 0 ? <>
           <div className="quiz-choice-grid quiz-choice-grid--two">
             <ChoiceCard title="Yes, include my CPF" description="Model current balances, future contributions and an estimated CPF LIFE payout." selected={answers.includeCpf} onClick={() => update("includeCpf", true)} />
             <ChoiceCard title="No, show a non-CPF view" description="Leave CPF balances, contributions and CPF LIFE income out of this projection." selected={!answers.includeCpf} onClick={() => update("includeCpf", false)} />
           </div>
+          </> : <p className="cpf-answer-summary">CPF included. <button className="text-action" type="button" onClick={() => setCpfPart(0)}>Change</button></p>}
 
           {answers.includeCpf ? <div className="quiz-stack quiz-subsection">
+            <details className="cpf-sections-index" key={cpfPart}><summary>Review CPF sections</summary><nav className="cpf-part-nav" aria-label="CPF sections">{cpfParts.map((title, index) => <button type="button" key={title} aria-current={cpfPart === index ? "step" : undefined} onClick={() => setCpfPart(index)}>{index + 1}. {title}</button>)}</nav></details>
+            {cpfPart === 0 ? <>
             <div>
               <span className="quiz-subsection__label">Your CPF status</span>
               <div className="segmented-choice">
@@ -558,6 +583,8 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
               <label><span>Current PR contribution year</span><select value={answers.cpfPrYear} onChange={(event) => update("cpfPrYear", event.target.value as CpfPrYear)}>{(["First Year", "Second Year", "Third Year Or Later"] as CpfPrYear[]).map((option) => <option key={option}>{option}</option>)}</select></label>
               <label><span>Contribution arrangement</span><select value={answers.cpfPrRateType} onChange={(event) => update("cpfPrRateType", event.target.value as CpfPrRateType)}>{(["Graduated Employer And Employee", "Full Employer And Graduated Employee", "Full Employer And Employee"] as CpfPrRateType[]).map((option) => <option key={option}>{option}</option>)}</select></label>
             </div> : null}
+            </> : null}
+            {cpfPart === 1 ? <>
             <div className="optional-question-block">
               <span className="quiz-subsection__label">Add current CPF balances for a fuller estimate?</span>
               <div className="segmented-choice"><button type="button" className={addCpfBalances ? "is-selected" : ""} onClick={() => setAddCpfBalances(true)}>Add my balances</button><button type="button" className={!addCpfBalances ? "is-selected" : ""} onClick={() => { setAddCpfBalances(false); setAnswers((current) => ({ ...current, cpfOa: 0, cpfSa: 0, cpfMa: 0, cpfRa: 0 })); }}>Not with me now</button></div>
@@ -568,6 +595,8 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
               {answers.currentAge < 55 ? <SliderQuestion label="CPF SA" helper="Your current Special Account balance. The model forms RA at age 55." value={answers.cpfSa} min={0} max={500_000} step={5_000} onChange={(value) => update("cpfSa", value)} format={(value) => formatCurrency(value, { compact: value >= 100_000 })} quickValues={[0, 25_000, 50_000, 100_000, 250_000]} /> : <SliderQuestion label="CPF RA" helper="At age 55 or above, enter your current Retirement Account balance." value={answers.cpfRa} min={0} max={700_000} step={5_000} onChange={(value) => update("cpfRa", value)} format={(value) => formatCurrency(value, { compact: value >= 100_000 })} quickValues={[0, 50_000, 110_000, 220_000, 440_000]} />}
               <SliderQuestion label="CPF MA" helper="Shown separately and not treated as general retirement spending money." value={answers.cpfMa} min={0} max={150_000} step={5_000} onChange={(value) => update("cpfMa", value)} format={(value) => formatCurrency(value, { compact: value >= 100_000 })} quickValues={[0, 25_000, 50_000, 79_000]} />
             </div> : null}
+            </> : null}
+            {cpfPart === 2 ? <>
             <div className="optional-question-block">
               <span className="quiz-subsection__label">Do you use CPF OA for a home loan?</span>
               <div className="segmented-choice"><button type="button" className={usesCpfForHousing ? "is-selected" : ""} onClick={() => setUsesCpfForHousing(true)}>Yes</button><button type="button" className={!usesCpfForHousing ? "is-selected" : ""} onClick={() => { setUsesCpfForHousing(false); update("cpfOaHousingMonthly", 0); }}>No</button></div>
@@ -576,7 +605,10 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
                 <SliderQuestion label="OA mortgage deductions end" helper="Use the expected loan payoff age, even if it is after retirement." value={answers.cpfOaHousingEndAge} min={answers.currentAge} max={answers.endAge} step={1} onChange={(value) => update("cpfOaHousingEndAge", value)} format={(value) => `Age ${value}`} quickValues={[55, 60, 65, 70]} />
               </div> : null}
             </div>
-            <CpfExtrasQuiz value={answers} onChange={(patch) => setAnswers((current) => ({ ...current, ...patch }))} />
+            <CpfExtrasQuiz section="insurance" value={answers} onChange={(patch) => setAnswers((current) => ({ ...current, ...patch }))} />
+            </> : null}
+            {cpfPart === 3 ? <>
+            <CpfExtrasQuiz section="topup" value={answers} onChange={(patch) => setAnswers((current) => ({ ...current, ...patch }))} />
             <div className="education-callout"><CircleHelp size={19} /><p>{answers.currentAge >= 55 ? "Your Special Account is already closed, so this path asks for OA, RA and MA. If you are still working, age-banded contributions continue until your chosen retirement age." : "At age 55, the model forms your Retirement Account and closes the Special Account. CPF LIFE income is then estimated separately from your chosen payout age."}</p></div>
             <SliderQuestion label="CPF LIFE payout start" helper="Choose an age from 65 to 70. This does not have to match your retirement age." value={Math.max(Math.min(70, answers.currentAge), answers.cpfLifeStartAge)} min={Math.min(70, Math.max(65, answers.currentAge))} max={70} step={1} onChange={(value) => update("cpfLifeStartAge", value)} format={(value) => `Age ${value}`} quickValues={[65, 67, 70]} />
             <div className="optional-question-block"><span className="quiz-subsection__label">Fine-tune CPF LIFE assumptions?</span><div className="segmented-choice"><button type="button" className={!refineCpf ? "is-selected" : ""} onClick={() => setRefineCpf(false)}>Keep Standard defaults</button><button type="button" className={refineCpf ? "is-selected" : ""} onClick={() => setRefineCpf(true)}>Fine tune</button></div></div>
@@ -589,6 +621,7 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
               <div className="segmented-choice"><button type="button" className={answers.cpfLifeMonthlyOverride <= 0 ? "is-selected" : ""} onClick={() => update("cpfLifeMonthlyOverride", 0)}>Use an estimate</button><button type="button" className={answers.cpfLifeMonthlyOverride > 0 ? "is-selected" : ""} onClick={() => update("cpfLifeMonthlyOverride", Math.max(500, answers.cpfLifeMonthlyOverride || 1_500))}>Use my payout</button></div>
               {answers.cpfLifeMonthlyOverride > 0 ? <SliderQuestion label="Actual monthly CPF LIFE payout" helper="Use the amount shown in your CPF records or official estimator." value={answers.cpfLifeMonthlyOverride} min={100} max={6_000} step={50} onChange={(value) => update("cpfLifeMonthlyOverride", value)} format={(value) => `${formatCurrency(value)}/mo`} quickValues={[500, 1_000, 1_500, 2_500, 4_000]} /> : null}
             </div> : null}
+            </> : null}
           </div> : <div className="education-callout"><CircleHelp size={19} /><p>Your result will intentionally exclude CPF contributions, account balances and CPF LIFE payouts. You can add them later from Edit assumptions.</p></div>}
         </QuestionStep>
       ) : null}
@@ -650,6 +683,8 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
 
       {step === 8 ? (
         <QuestionStep eyebrow="Review" title="Here is the retirement picture we’ll test." intro="These are planning assumptions, not guaranteed outcomes. You can change them from the detailed editor after seeing the result.">
+          <div className="review-edit-links" aria-label="Edit your answers">{stepLabels.slice(0, 8).map((label, index) => <button type="button" className="secondary-action" key={label} onClick={() => jumpTo(index)}>Edit {label}</button>)}</div>
+          {(resourceStatus.cash === "unknown" || resourceStatus.investments === "unknown") ? <p className="education-callout">Some balances are unknown and excluded. Your result will be an incomplete estimate.</p> : null}
           <div className="review-grid">
             <article>
               <span>Timeline</span>
@@ -685,11 +720,14 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
       ) : null}
 
       <div className="quiz-navigation">
+        {step === 6 ? <button className="text-action" type="button" onClick={() => { update("includeOneTimeEvents", false); update("includeOtherIncome", false); jumpTo(7); }}>Skip optional events & income</button> : null}
         <button className="secondary-action" type="button" onClick={back}><ArrowLeft size={18} /> Back</button>
         <button className="primary-action" type="button" disabled={!canContinue} onClick={next}>
           {step === stepLabels.length - 1 ? "Build my projection" : "Continue"} <ArrowRight size={18} />
         </button>
       </div>
     </section>
-  );
+    )}
+    {draftControls}
+  </>;
 }

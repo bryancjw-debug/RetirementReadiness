@@ -88,7 +88,7 @@ export function CouplePlanner({ onExit }: { onExit: () => void }) {
     const timer = window.setTimeout(() => {
       setMode("results");
       window.scrollTo({ top: 0, behavior: "smooth" });
-    }, 900);
+    }, 150);
     return () => window.clearTimeout(timer);
   }, [mode]);
 
@@ -127,29 +127,6 @@ export function CouplePlanner({ onExit }: { onExit: () => void }) {
         <div><p className="eyebrow">Your household retirement picture</p><h2>{resultHeadline}</h2><p>The model funds {formatCurrency(projection.summary.totalFundedRetirementNeed)} of an estimated {formatCurrency(projection.summary.totalRetirementNeed)} household retirement spending need.</p><p className="result-subline">One household target: <strong>{formatCurrency(plan.retirementSpendingAnnual / 12)} per month today</strong> · <strong>{formatCurrency(startRow.householdSpending / 12)} per month when spending begins</strong></p><div className="results-action-row"><button className="results-edit-action" type="button" onClick={() => { setMode("edit"); window.scrollTo({ top: 0, behavior: "smooth" }); }}><Pencil size={17} /> Edit household assumptions</button><button className="secondary-action" type="button" onClick={onExit}><RotateCcw size={17} /> Start over</button></div></div>
         <div className="results-header__badge">{projection.summary.status === "ready" ? <BadgeCheck size={28} /> : <CircleAlert size={28} />}<strong>{formatPercent(projection.summary.readinessPercent)}</strong></div>
       </div>
-
-      <div className="metric-grid">
-        <Metric label="Estimated need funded" value={formatPercent(projection.summary.readinessPercent)} note="Across the household projection" tone={projection.summary.status === "ready" ? "good" : "warn"} />
-        <Metric label="Projected funding lasts" value={`Through ${projection.summary.runwayYear}`} note={projection.summary.status === "ready" ? "No unfunded year in this scenario" : "First shortfall may follow"} tone={projection.summary.status === "ready" ? "good" : "warn"} />
-        <Metric label="Resources when spending begins" value={formatCurrency(startRow.totalTrackedResources)} note={`${plan.people[0].label} age ${startRow.people[0].age} · ${plan.people[1].label} age ${startRow.people[1].age}`} tone="blue" />
-        <Metric label="Peak tracked resources" value={formatCurrency(projection.summary.peakTrackedResources)} note={`In ${projection.summary.peakYear}; includes displayed CPF LIFE reserves`} />
-      </div>
-
-      <section className="insights-card"><div className="insights-card__header"><div><p className="eyebrow">Household insights</p><h3>What stands out across both timelines</h3></div><Sparkles size={24} /></div><div className="insights-grid">
-        <article className="insight-item insight-item--blue"><strong>{transitionYears > 0 ? `${transitionYears}-year retirement transition` : "Both retirement timelines align"}</strong><p>{transitionYears > 0 ? "One person’s regular contributions stop earlier while the other person’s continue. The household target begins according to the option you selected." : "Both contribution schedules stop in the same projection year under the ages entered."}</p></article>
-        <article className="insight-item insight-item--good"><strong>Two income journeys, one spending target</strong><p>CPF LIFE and net SRS withdrawals are calculated for each person, then combined only in the years when those amounts become available.</p></article>
-        <article className="insight-item insight-item--warn"><strong>Focused retirement scope</strong><p>Employment income is used for CPF estimates, not as household spending cash. Property, insurance, estate planning and tax optimisation are intentionally outside this result.</p></article>
-      </div></section>
-
-      <section className="individual-results-section"><div className="section-heading"><p className="eyebrow">Individual journeys</p><h2>Clear, separate CPF and SRS outcomes</h2><p>Each card shows only that person’s assumptions and projected flows. The household outcome above combines them without merging account ownership.</p></div><div className="couple-person-grid"><PersonResultCard index={0} plan={plan} projection={projection} /><PersonResultCard index={1} plan={plan} projection={projection} /></div></section>
-
-      <section className="scenario-details-card" aria-labelledby="scenario-details-title">
-        <div><p className="eyebrow">Release 3 scenario details</p><h2 id="scenario-details-title">Events and income included in this result</h2><p>These are assumptions—not guaranteed resources. Switch uncertain items off and compare the result before relying on them.</p></div>
-        <div className="scenario-detail-grid">
-          <article><span>Shared one-time event</span><strong>{plan.includeOneTimeEvents ? plan.oneTimeEvents[0]?.label ?? "Included" : "Not included"}</strong><small>{plan.includeOneTimeEvents && plan.oneTimeEvents[0] ? `${formatCurrency(plan.oneTimeEvents[0].amount)} ${plan.oneTimeEvents[0].direction} when ${plan.people[0].label} is age ${plan.oneTimeEvents[0].age}${plan.oneTimeEvents[0].certainty === "possible" ? " · Possible" : ""}` : "No shared event changes the projection"}</small></article>
-          {plan.people.map((item) => <article key={item.id}><span>{item.label} · other retirement income</span><strong>{item.inputs.customIncomeStreams[0]?.label ?? "Not included"}</strong><small>{item.inputs.customIncomeStreams[0] ? `${formatCurrency(item.inputs.customIncomeStreams[0].amount)}/month from age ${item.inputs.customIncomeStreams[0].startAge}` : "CPF LIFE and SRS remain separately modelled"}</small></article>)}
-        </div>
-      </section>
 
       <section className="chart-view-panel" aria-labelledby="chart-view-heading">
         <div>
@@ -228,7 +205,38 @@ export function CouplePlanner({ onExit }: { onExit: () => void }) {
         </article>
       </div>
 
+      <div className="metric-grid">
+        <Metric label="Estimated need funded" value={formatPercent(projection.summary.readinessPercent)} note="Across the household projection" tone={projection.summary.status === "ready" ? "good" : "warn"} />
+        <Metric label="Projected funding lasts" value={`Through ${projection.summary.runwayYear}`} note={projection.summary.status === "ready" ? "No unfunded year in this scenario" : "First shortfall may follow"} tone={projection.summary.status === "ready" ? "good" : "warn"} />
+        <Metric label="Resources when spending begins" value={formatCurrency(startRow.totalTrackedResources)} note={`${plan.people[0].label} age ${startRow.people[0].age} · ${plan.people[1].label} age ${startRow.people[1].age}`} tone="blue" />
+        <Metric label="Peak tracked resources" value={formatCurrency(projection.summary.peakTrackedResources)} note={`In ${projection.summary.peakYear}; includes displayed CPF LIFE reserves`} />
+      </div>
+
+      <details className="result-disclosure"><summary>Household insights</summary>
+      <section className="insights-card"><div className="insights-card__header"><div><p className="eyebrow">Household insights</p><h3>What stands out across both timelines</h3></div><Sparkles size={24} /></div><div className="insights-grid">
+        <article className="insight-item insight-item--blue"><strong>{transitionYears > 0 ? `${transitionYears}-year retirement transition` : "Both retirement timelines align"}</strong><p>{transitionYears > 0 ? "One person’s regular contributions stop earlier while the other person’s continue. The household target begins according to the option you selected." : "Both contribution schedules stop in the same projection year under the ages entered."}</p></article>
+        <article className="insight-item insight-item--good"><strong>Two income journeys, one spending target</strong><p>CPF LIFE and net SRS withdrawals are calculated for each person, then combined only in the years when those amounts become available.</p></article>
+        <article className="insight-item insight-item--warn"><strong>Focused retirement scope</strong><p>Employment income is used for CPF estimates, not as household spending cash. Property, insurance, estate planning and tax optimisation are intentionally outside this result.</p></article>
+      </div></section>
+      </details>
+
+      <details className="result-disclosure"><summary>Each person's CPF and SRS</summary>
+      <section className="individual-results-section"><div className="section-heading"><p className="eyebrow">Individual journeys</p><h2>Clear, separate CPF and SRS outcomes</h2><p>Each card shows only that person’s assumptions and projected flows. The household outcome above combines them without merging account ownership.</p></div><div className="couple-person-grid"><PersonResultCard index={0} plan={plan} projection={projection} /><PersonResultCard index={1} plan={plan} projection={projection} /></div></section>
+      </details>
+
+      <details className="result-disclosure"><summary>Events and income assumptions</summary>
+      <section className="scenario-details-card" aria-labelledby="scenario-details-title">
+        <div><p className="eyebrow">Additional assumptions</p><h2 id="scenario-details-title">Events and income included in this result</h2><p>These are assumptions—not guaranteed resources. Switch uncertain items off and compare the result before relying on them.</p></div>
+        <div className="scenario-detail-grid">
+          <article><span>Shared one-time event</span><strong>{plan.includeOneTimeEvents ? plan.oneTimeEvents[0]?.label ?? "Included" : "Not included"}</strong><small>{plan.includeOneTimeEvents && plan.oneTimeEvents[0] ? `${formatCurrency(plan.oneTimeEvents[0].amount)} ${plan.oneTimeEvents[0].direction} when ${plan.people[0].label} is age ${plan.oneTimeEvents[0].age}${plan.oneTimeEvents[0].certainty === "possible" ? " · Possible" : ""}` : "No shared event changes the projection"}</small></article>
+          {plan.people.map((item) => <article key={item.id}><span>{item.label} · other retirement income</span><strong>{item.inputs.customIncomeStreams[0]?.label ?? "Not included"}</strong><small>{item.inputs.customIncomeStreams[0] ? `${formatCurrency(item.inputs.customIncomeStreams[0].amount)}/month from age ${item.inputs.customIncomeStreams[0].startAge}` : "CPF LIFE and SRS remain separately modelled"}</small></article>)}
+        </div>
+      </section>
+      </details>
+
+      <details className="result-disclosure"><summary>How this household result is calculated</summary>
       <section className="math-card"><div className="math-card__intro"><Calculator size={24} /><div><h3>How this household result is calculated</h3><p>Each calendar year advances both ages until the younger person reaches their selected planning horizon, initially age 100. CPF contribution rates, account allocations, RA formation, CPF LIFE starts and SRS withdrawals are calculated person by person. Household spending, cash and investments are counted once.</p><p>Retirement income is used before shared cash and investments. Eligible CPF OA/SA drawdown is considered only after a person is at least 55 and has reached their selected retirement age. MediSave is tracked but not used for retirement spending.</p></div></div><div className="math-grid"><span>Total household spending need</span><strong>{formatCurrency(projection.summary.totalRetirementNeed)}</strong><span>Total funded need</span><strong>{formatCurrency(projection.summary.totalFundedRetirementNeed)}</strong><span>Total projected shortfall</span><strong>{formatCurrency(projection.summary.totalShortfall)}</strong><span>Projection inflation</span><strong>{formatPercent(plan.retirementSpendingInflationRate)}</strong></div></section>
+      </details>
 
       <section className="year-data-card"><div className="year-data-card__header"><div><h3>Year-by-year household view</h3><p>Annual household totals with each person’s age, owned accounts, other income and shared events.</p></div><button className="secondary-action" type="button" onClick={() => setShowYears((current) => !current)}>{showYears ? "Hide years" : "Show years"}</button></div>{showYears ? <><div className="table-wrap household-year-table"><table><thead><tr><th>Year</th><th>{plan.people[0].label} age</th><th>{plan.people[1].label} age</th><th>Spending</th><th>Event in / out</th><th>{plan.people[0].label} income</th><th>{plan.people[1].label} income</th><th>{plan.people[0].label} CPF / SRS</th><th>{plan.people[1].label} CPF / SRS</th><th>Shared assets</th><th>Shortfall</th></tr></thead><tbody>{projection.rows.map((row) => <tr key={row.calendarYear} className={row.shortfall > 0 ? "has-shortfall" : ""}><td>{row.calendarYear}</td><td>{row.people[0].age}</td><td>{row.people[1].age}</td><td>{formatCurrency(row.householdSpending)}</td><td>{formatCurrency(row.oneTimeInflow)} / {formatCurrency(row.oneTimeOutflow)}</td><td>{formatCurrency(row.people[0].customIncome)}</td><td>{formatCurrency(row.people[1].customIncome)}</td><td>{formatCurrency(row.people[0].cpfOa + row.people[0].cpfSa + row.people[0].cpfMa + row.people[0].cpfRa + row.people[0].cpfLifeReserve)} / {formatCurrency(row.people[0].srsBalance)}</td><td>{formatCurrency(row.people[1].cpfOa + row.people[1].cpfSa + row.people[1].cpfMa + row.people[1].cpfRa + row.people[1].cpfLifeReserve)} / {formatCurrency(row.people[1].srsBalance)}</td><td>{formatCurrency(row.endingCashSavings + row.endingInvestments)}</td><td>{formatCurrency(row.shortfall)}</td></tr>)}</tbody></table></div><div className="household-year-cards">{projection.rows.map((row) => <article key={row.calendarYear} className={row.shortfall > 0 ? "has-shortfall" : ""}><header><strong>{row.calendarYear}</strong><span>{plan.people[0].label} {row.people[0].age} · {plan.people[1].label} {row.people[1].age}</span></header><dl><div><dt>Household spending</dt><dd>{formatCurrency(row.householdSpending)}</dd></div>{row.oneTimeInflow || row.oneTimeOutflow ? <div><dt>Event inflow / outflow</dt><dd>{formatCurrency(row.oneTimeInflow)} / {formatCurrency(row.oneTimeOutflow)}</dd></div> : null}<div><dt>{plan.people[0].label} CPF / SRS / other income</dt><dd>{formatCurrency(row.people[0].cpfOa + row.people[0].cpfSa + row.people[0].cpfMa + row.people[0].cpfRa + row.people[0].cpfLifeReserve)} / {formatCurrency(row.people[0].srsBalance)} / {formatCurrency(row.people[0].customIncome)}</dd></div><div><dt>{plan.people[1].label} CPF / SRS / other income</dt><dd>{formatCurrency(row.people[1].cpfOa + row.people[1].cpfSa + row.people[1].cpfMa + row.people[1].cpfRa + row.people[1].cpfLifeReserve)} / {formatCurrency(row.people[1].srsBalance)} / {formatCurrency(row.people[1].customIncome)}</dd></div><div><dt>Shortfall</dt><dd>{formatCurrency(row.shortfall)}</dd></div></dl></article>)}</div></> : null}</section>
 

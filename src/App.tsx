@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -23,6 +23,7 @@ import {
   srsPrescribedRetirementAge
 } from "./utils/projection";
 import { formatCurrency, formatNumber, formatPercent } from "./utils/formatters";
+import { buildRetirementFundingRows, convertFundingRowsToTodayDollars, type FundingValueMode } from "./utils/fundingChart";
 import type { OnboardingAnswers } from "./onboarding";
 import type {
   CpfLifePlan,
@@ -360,7 +361,11 @@ function createOneTimeEvent(inputs: RetirementInputs): OneTimeFinancialEvent {
 export default function App() {
   const [inputs, setInputs] = useState<RetirementInputs>(defaultInputs);
   const [showTable, setShowTable] = useState(false);
+  const [fundingValueMode, setFundingValueMode] = useState<FundingValueMode>("future");
+  const [selectedFundingAge, setSelectedFundingAge] = useState(defaultInputs.retirementAge);
+  const fundingChartFrameRef = useRef<HTMLDivElement>(null);
   const [theme, setTheme] = useState<ThemePreference>(getInitialTheme);
+  const [quizActive, setQuizActive] = useState(false);
   const [appMode, setAppMode] = useState<AppMode>("onboarding");
   const [experienceMode, setExperienceMode] = useState<ExperienceMode>("individual");
   const [onboardingAnswers, setOnboardingAnswers] = useState<OnboardingAnswers | null>(null);
@@ -374,22 +379,14 @@ export default function App() {
   const cpfLifeBridgeYears = Math.max(0, inputs.cpfLifeStartAge - inputs.retirementAge);
   const selectedLifestylePreset = lifestylePresets.find((preset) => preset.id === inputs.retirementLifestylePreset);
   const projectedMonthlyGoalAtRetirement = projectedMonthlyRetirementSpending;
-  const drawdownTotals = projection.rows.reduce(
-    (totals, row) => {
-      if (row.phase !== "retirement") return totals;
-      totals.retirementIncome += row.cpfLifeIncome + row.passiveIncomeGenerated + row.customIncomeGenerated + row.srsNetWithdrawal;
-      totals.cash += row.cashWithdrawal;
-      totals.investments += row.investmentWithdrawal;
-      totals.cpf += row.cpfDrawdown;
-      totals.shortfall += row.shortfall;
-      return totals;
-    },
-    { retirementIncome: 0, cash: 0, investments: 0, cpf: 0, shortfall: 0 }
+  const nominalFundingRows = useMemo(() => buildRetirementFundingRows(projection.rows), [projection.rows]);
+  const fundingRows = useMemo(
+    () => fundingValueMode === "today"
+      ? convertFundingRowsToTodayDollars(nominalFundingRows, inputs.currentAge, inputs.retirementSpendingInflationRate)
+      : nominalFundingRows,
+    [fundingValueMode, inputs.currentAge, inputs.retirementSpendingInflationRate, nominalFundingRows]
   );
-  const drawdownWaterfallTotal = Math.max(
-    1,
-    drawdownTotals.retirementIncome + drawdownTotals.cash + drawdownTotals.investments + drawdownTotals.cpf + drawdownTotals.shortfall
-  );
+  const selectedFundingRow = fundingRows.find((row) => row.age === selectedFundingAge) ?? fundingRows[0];
 
   const chartRows = projection.rows.map((row) => ({
     age: row.age,
@@ -413,6 +410,20 @@ export default function App() {
     cpfDrawdown: Math.round(row.cpfDrawdown),
     shortfall: Math.round(row.shortfall)
   }));
+
+  useEffect(() => {
+    if (!nominalFundingRows.some((row) => row.age === selectedFundingAge)) {
+      setSelectedFundingAge(nominalFundingRows[0]?.age ?? inputs.retirementAge);
+    }
+  }, [inputs.retirementAge, nominalFundingRows, selectedFundingAge]);
+
+  useEffect(() => {
+    const frame = fundingChartFrameRef.current;
+    const selectedIndex = fundingRows.findIndex((row) => row.age === selectedFundingAge);
+    if (!frame || selectedIndex < 0 || fundingRows.length < 2) return;
+    const progress = selectedIndex / (fundingRows.length - 1);
+    frame.scrollTo({ left: progress * Math.max(frame.scrollWidth - frame.clientWidth, 0), behavior: "smooth" });
+  }, [fundingRows, selectedFundingAge]);
 
   const resultHeadline = projection.summary.status === "ready"
     ? `Projected spending remains funded through age ${inputs.endAge}`
@@ -468,6 +479,8 @@ export default function App() {
 
   function updateInput<K extends keyof RetirementInputs>(key: K, value: RetirementInputs[K]) {
     setInputs((current) => ({ ...current, [key]: value }));
+    const reviewedBalance = key === "currentCashSavings" ? "Cash" : key === "currentInvestments" ? "Investments" : ["cpfOa", "cpfSa", "cpfRa", "cpfMa", "includeCpf"].includes(key) ? "Current CPF" : null;
+    if (reviewedBalance) setOnboardingAnswers((current) => current ? { ...current, unknownBalances: current.unknownBalances?.filter((label) => label !== reviewedBalance) } : current);
   }
 
   function completeOnboarding(nextInputs: RetirementInputs, answers: OnboardingAnswers) {
@@ -564,13 +577,13 @@ export default function App() {
     const timer = window.setTimeout(() => {
       setAppMode("results");
       window.scrollTo({ top: 0, behavior: "smooth" });
-    }, 900);
+    }, 150);
     return () => window.clearTimeout(timer);
   }, [appMode]);
 
   if (experienceMode === "couple") {
     return (
-      <main className="app-shell">
+      <main className="app-shell app-shell--compact">
         <section className="hero">
           <div>
             <p className="eyebrow">Simple Singapore Retirement Checkup</p>
@@ -597,18 +610,18 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell ${quizActive || appMode !== "onboarding" ? "app-shell--compact" : "app-shell--landing"}`}>
       <section className="hero">
         <div>
-          <p className="eyebrow">Simple Singapore Retirement Checkup</p>
+          {quizActive || appMode !== "onboarding" ? <p className="eyebrow">Simple Singapore Retirement Checkup</p> : null}
           <h1>Retirement<wbr />Readiness</h1>
-          <p>
+          {quizActive || appMode !== "onboarding" ? <p>
             {appMode === "onboarding"
               ? "Start with a few guided questions, then explore what your assumptions could mean for retirement."
               : appMode === "edit"
                 ? "Refine the detailed assumptions behind your retirement projection."
                 : "Explore your result first, then change the assumptions that matter to you."}
-          </p>
+          </p> : null}
         </div>
         <div className="hero-actions">
           <button
@@ -649,7 +662,7 @@ export default function App() {
       </section> : null}
 
       {appMode === "onboarding" ? (
-        <OnboardingWizard initialInputs={defaultInputs} onComplete={completeOnboarding} onExploreSample={exploreSample} onPlanTogether={() => setExperienceMode("couple")} />
+        <OnboardingWizard onActiveChange={setQuizActive} initialInputs={defaultInputs} onComplete={completeOnboarding} onExploreSample={exploreSample} onPlanTogether={() => setExperienceMode("couple")} />
       ) : null}
 
       {appMode === "processing" ? (
@@ -1196,94 +1209,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="metric-grid">
-          <MetricCard label="Estimated need funded" value={formatPercent(projection.summary.readinessPercent)} note="Across the full projection period" tone={projection.summary.status === "ready" ? "good" : "warn"} />
-          <MetricCard label="Projected funding lasts" value={projection.summary.status === "ready" ? `Through age ${inputs.endAge}` : `To about age ${projection.summary.runwayAge}`} note={projection.summary.status === "ready" ? "No unfunded year in this scenario" : "First shortfall may follow"} tone={projection.summary.status === "ready" ? "good" : "warn"} />
-          <MetricCard label="Funds at retirement" value={formatCurrency(retirementRow?.openingBalance ?? 0)} note={`At age ${inputs.retirementAge}`} tone="blue" />
-          <MetricCard label="Peak Wealth" value={formatCurrency(projection.summary.peakBalance)} note={`At age ${projection.summary.peakBalanceAge}`} />
-        </div>
-
-        <section className="insights-card" aria-labelledby="insights-title">
-          <div className="insights-card__header">
-            <div><p className="eyebrow">What stands out</p><h3 id="insights-title">Insights from the assumptions you entered</h3></div>
-            <Sparkles size={24} />
-          </div>
-          <div className="insights-grid">
-            {resultInsights.map((insight) => (
-              <article className={`insight-item insight-item--${insight.tone}`} key={insight.title}>
-                <strong>{insight.title}</strong>
-                <p>{insight.body}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="scenario-details-card" aria-labelledby="individual-scenario-details-title">
-          <div><p className="eyebrow">Release 3 and 4 details</p><h2 id="individual-scenario-details-title">What else this result is counting</h2><p>Each item below maps directly to the year-by-year projection. Switch uncertain assumptions off and compare the result before relying on them.</p></div>
-          <div className="scenario-detail-grid">
-            <article><span>One-time event</span><strong>{inputs.includeOneTimeEvents ? inputs.oneTimeEvents[0]?.label ?? "Included" : "Not included"}</strong><small>{inputs.includeOneTimeEvents && inputs.oneTimeEvents[0] ? `${formatCurrency(inputs.oneTimeEvents[0].amount)} ${inputs.oneTimeEvents[0].direction} at age ${inputs.oneTimeEvents[0].age}${inputs.oneTimeEvents[0].certainty === "possible" ? " · Possible" : ""}` : "No event changes this result"}</small></article>
-            <article><span>Other retirement income</span><strong>{inputs.customIncomeStreams[0]?.label ?? "Not included"}</strong><small>{inputs.customIncomeStreams[0] ? `${formatCurrency(inputs.customIncomeStreams[0].amount)}/${inputs.customIncomeStreams[0].frequency === "monthly" ? "month" : "year"} from age ${inputs.customIncomeStreams[0].startAge} to ${inputs.customIncomeStreams[0].endAge}` : "CPF LIFE, SRS and portfolio income remain separately displayed"}</small></article>
-            <article><span>Core assumptions</span><strong>{formatPercent(inputs.retirementSpendingInflationRate)} inflation · {formatPercent(inputs.preRetirementInvestmentReturnRate)} investment return</strong><small>Projection ends at age {inputs.endAge}; retirement investment return is {formatPercent(inputs.retirementReturnRate)}</small></article>
-          </div>
-        </section>
-
-        <section className="gap-card" aria-labelledby="gap-card-title">
-          <div className="gap-card__copy">
-            <p className="eyebrow">Explore the model</p>
-            <h3 id="gap-card-title">See what could change the picture.</h3>
-            <p>
-              If there is a projected gap, these figures show three mathematical sensitivities. They are not recommendations—use Edit assumptions to explore the trade-offs yourself.
-            </p>
-          </div>
-          <div className="gap-options">
-            <GapOptionCard
-              label="Additional Monthly Cash"
-              value={formatCurrency(projection.summary.extraMonthlyCashSavingsRequired)}
-              note={`Assumes ${formatPercent(inputs.cashInterestRate)} cash savings rate`}
-              tone="blue"
-            />
-            <GapOptionCard
-              label="Additional Monthly Investing"
-              value={formatCurrency(projection.summary.extraMonthlyInvestmentRequired)}
-              note={`Assumes ${formatPercent(inputs.preRetirementInvestmentReturnRate)} return before retirement`}
-              tone="good"
-            />
-            <GapOptionCard
-              label="Monthly Spending Difference"
-              value={formatCurrency(projection.summary.monthlySpendingReductionRequired)}
-              note="Today's monthly spending reduction, inflated by the app over time"
-              tone="warn"
-            />
-          </div>
-        </section>
-
-        <section className="drawdown-card" aria-labelledby="drawdown-title">
-          <div className="drawdown-card__copy">
-            <p className="eyebrow">Retirement Drawdown Strategy</p>
-            <h3 id="drawdown-title">How spending is funded each year.</h3>
-            <p>
-              The model uses retirement income first. If income is not enough, it draws from cash, investments,
-              CPF SA/OA, and only then records an unfunded shortfall.
-            </p>
-          </div>
-          <div className="drawdown-waterfall" aria-label="Retirement funding waterfall">
-            {[
-              { label: "Retirement income", value: drawdownTotals.retirementIncome, className: "waterfall-income" },
-              { label: "Cash holdings", value: drawdownTotals.cash, className: "waterfall-cash" },
-              { label: "Investment holdings", value: drawdownTotals.investments, className: "waterfall-investments" },
-              { label: "CPF OA/SA", value: drawdownTotals.cpf, className: "waterfall-cpf" },
-              { label: "Unfunded shortfall", value: drawdownTotals.shortfall, className: "waterfall-shortfall" }
-            ].map((item, index) => (
-              <article className={`waterfall-step ${item.className}`} key={item.label}>
-                <span>{index + 1}. {item.label}</span>
-                <strong>{formatCurrency(item.value)}</strong>
-                <i aria-hidden="true">
-                  <b style={{ width: `${Math.max(4, (item.value / drawdownWaterfallTotal) * 100)}%` }} />
-                </i>
-              </article>
-            ))}
-          </div>
-        </section>
+        {onboardingAnswers?.unknownBalances?.length ? <p className="education-callout" role="status">Incomplete estimate: {onboardingAnswers.unknownBalances.join(", ")} balances were not entered and are excluded. Add these in Edit assumptions before relying on the result.</p> : null}
 
         <div className="chart-grid">
           <article className="chart-card">
@@ -1325,11 +1251,15 @@ export default function App() {
             </div>
           </article>
 
-          <article className="chart-card">
+          <article className="chart-card funding-chart-card">
             <div className="chart-card__header">
               <div>
-                <h3>Retirement Cash Flow</h3>
-                <p>Separates retirement income, spending, and the drawdown sources used when income is not enough.</p>
+                <h3>How Your Retirement Spending Is Funded</h3>
+                <p>Each annual bar equals that year's spending need. Its colours show the income and assets used to meet it.</p>
+              </div>
+              <div className="funding-view-toggle" role="group" aria-label="Display values">
+                <button type="button" className={fundingValueMode === "future" ? "is-selected" : ""} aria-pressed={fundingValueMode === "future"} onClick={() => setFundingValueMode("future")}>Future dollars</button>
+                <button type="button" className={fundingValueMode === "today" ? "is-selected" : ""} aria-pressed={fundingValueMode === "today"} onClick={() => setFundingValueMode("today")}>Today's dollars</button>
               </div>
             </div>
             <ChartLegend
@@ -1337,38 +1267,152 @@ export default function App() {
                 { label: "CPF LIFE", className: "dot-primary" },
                 { label: "Dividends", className: "dot-success" },
                 { label: "Custom Income", className: "dot-custom-income" },
-                { label: "SRS Withdrawal", className: "dot-custom-income" },
-                { label: "Spending", className: "dot-error" },
+                { label: "SRS Withdrawal", className: "dot-srs" },
                 { label: "Cash Drawdown", className: "dot-cash" },
                 { label: "Investment Drawdown", className: "dot-investments" },
                 { label: "CPF Drawdown", className: "dot-cpf-oa" },
-                { label: "Shortfall", className: "dot-warning" }
+                { label: "Unfunded", className: "dot-error" }
               ]}
             />
-            <div className="chart-frame">
-              <div className="chart-frame__inner">
+            <p className="chart-context-note">{fundingValueMode === "future" ? "Projected annual amounts at each future age." : "Annual amounts converted back to today's purchasing power."} Tap a bar or choose an age below for the exact breakdown.</p>
+            <div className="chart-frame funding-chart-frame" ref={fundingChartFrameRef}>
+              <div className="chart-frame__inner funding-chart-frame__inner">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartRows} margin={{ top: 12, right: 20, left: 4, bottom: 8 }}>
+                  <BarChart
+                    data={fundingRows}
+                    margin={{ top: 12, right: 20, left: 4, bottom: 8 }}
+                    onClick={(state: any) => {
+                      const age = Number(state?.activeLabel);
+                      if (Number.isFinite(age)) setSelectedFundingAge(age);
+                    }}
+                  >
                     <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
                     <XAxis dataKey="age" tickLine={false} axisLine={false} />
                     <YAxis tickFormatter={(value) => formatCurrency(Number(value), { compact: true })} tickLine={false} axisLine={false} />
                     <Tooltip content={<ChartTooltip />} />
-                    <Line dataKey="cpfLifeIncome" name="CPF LIFE Income" type="monotone" stroke="var(--chart-primary)" strokeWidth={3} dot={false} />
-                    <Line dataKey="passiveIncome" name="Dividends / Passive Income" type="monotone" stroke="var(--chart-success)" strokeWidth={3} dot={false} />
-                    <Line dataKey="customIncome" name="Custom Income" type="monotone" stroke="var(--chart-custom-income)" strokeWidth={3} dot={false} />
-                    <Line dataKey="srsIncome" name="SRS Withdrawal" type="monotone" stroke="var(--chart-custom-income)" strokeWidth={2.6} dot={false} strokeDasharray="5 4" />
-                    <Line dataKey="spending" name="Spending Need" type="monotone" stroke="var(--chart-error)" strokeWidth={3} dot={false} />
-                    <Line dataKey="cashWithdrawal" name="Cash Drawdown" type="monotone" stroke="var(--chart-cash)" strokeWidth={2.6} dot={false} />
-                    <Line dataKey="investmentWithdrawal" name="Investment Drawdown" type="monotone" stroke="var(--chart-investments)" strokeWidth={2.6} dot={false} />
-                    <Line dataKey="cpfDrawdown" name="CPF OA/SA Drawdown" type="monotone" stroke="var(--chart-cpf-oa)" strokeWidth={2.6} dot={false} />
-                    <Line dataKey="shortfall" name="Unfunded Shortfall" type="monotone" stroke="var(--chart-warning)" strokeWidth={2.6} dot={false} />
-                  </LineChart>
+                    <Bar dataKey="cpfLife" name="CPF LIFE Income" stackId="funding" fill="var(--chart-primary)" />
+                    <Bar dataKey="dividends" name="Dividends / Passive Income" stackId="funding" fill="var(--chart-success)" />
+                    <Bar dataKey="customIncome" name="Custom Income" stackId="funding" fill="var(--chart-custom-income)" />
+                    <Bar dataKey="srs" name="SRS Withdrawal" stackId="funding" fill="var(--chart-srs)" />
+                    <Bar dataKey="cash" name="Cash Drawdown" stackId="funding" fill="var(--chart-cash)" />
+                    <Bar dataKey="investments" name="Investment Drawdown" stackId="funding" fill="var(--chart-investments)" />
+                    <Bar dataKey="cpf" name="CPF OA/SA Drawdown" stackId="funding" fill="var(--chart-cpf-oa)" />
+                    <Bar dataKey="shortfall" name="Unfunded Spending" stackId="funding" fill="var(--chart-error)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
+            <p className="chart-swipe-hint">Swipe the chart left to see later ages.</p>
+
+            {selectedFundingRow ? (
+              <section className="selected-funding" aria-labelledby="selected-funding-title">
+                <div className="selected-funding__header">
+                  <div>
+                    <span>Selected retirement year</span>
+                    <h4 id="selected-funding-title">Age {selectedFundingRow.age}: {formatCurrency(selectedFundingRow.spending)} needed</h4>
+                  </div>
+                  <label>
+                    <span>Choose age</span>
+                    <select value={selectedFundingRow.age} onChange={(event) => setSelectedFundingAge(Number(event.target.value))}>
+                      {fundingRows.map((row) => <option value={row.age} key={row.age}>Age {row.age}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <div className="selected-funding__waterfall">
+                  {[
+                    { label: "CPF LIFE", value: selectedFundingRow.cpfLife, className: "funding-cpf-life" },
+                    { label: "Dividends", value: selectedFundingRow.dividends, className: "funding-dividends" },
+                    { label: "Custom income", value: selectedFundingRow.customIncome, className: "funding-custom" },
+                    { label: "SRS", value: selectedFundingRow.srs, className: "funding-srs" },
+                    { label: "Cash used", value: selectedFundingRow.cash, className: "funding-cash" },
+                    { label: "Investments sold", value: selectedFundingRow.investments, className: "funding-investments" },
+                    { label: "CPF OA/SA used", value: selectedFundingRow.cpf, className: "funding-cpf" },
+                    { label: "Unfunded", value: selectedFundingRow.shortfall, className: "funding-shortfall" }
+                  ].filter((item) => item.value > 0).map((item) => (
+                    <div className={`selected-funding__item ${item.className}`} key={item.label}>
+                      <i aria-hidden="true" />
+                      <span>{item.label}</span>
+                      <strong>{formatCurrency(item.value)}</strong>
+                    </div>
+                  ))}
+                </div>
+                <p className="selected-funding__note">
+                  {selectedFundingRow.oneTimeOutflow > 0 ? `Includes ${formatCurrency(selectedFundingRow.oneTimeOutflow)} of one-time outflows. ` : ""}
+                  {selectedFundingRow.surplusIncome > 0 ? `${formatCurrency(selectedFundingRow.surplusIncome)} of income above this year's need is retained in cash.` : selectedFundingRow.shortfall > 0 ? `${formatCurrency(selectedFundingRow.shortfall)} remains unfunded after all available sources are used.` : "The full spending need is funded in this year."}
+                </p>
+              </section>
+            ) : null}
           </article>
         </div>
 
+        <div className="metric-grid">
+          <MetricCard label="Estimated need funded" value={formatPercent(projection.summary.readinessPercent)} note="Across the full projection period" tone={projection.summary.status === "ready" ? "good" : "warn"} />
+          <MetricCard label="Projected funding lasts" value={projection.summary.status === "ready" ? `Through age ${inputs.endAge}` : `To about age ${projection.summary.runwayAge}`} note={projection.summary.status === "ready" ? "No unfunded year in this scenario" : "First shortfall may follow"} tone={projection.summary.status === "ready" ? "good" : "warn"} />
+          <MetricCard label="Funds at retirement" value={formatCurrency(retirementRow?.openingBalance ?? 0)} note={`At age ${inputs.retirementAge}`} tone="blue" />
+          <MetricCard label="Peak Wealth" value={formatCurrency(projection.summary.peakBalance)} note={`At age ${projection.summary.peakBalanceAge}`} />
+        </div>
+
+        <section className="gap-card" aria-labelledby="gap-card-title">
+          <div className="gap-card__copy">
+            <p className="eyebrow">Explore the model</p>
+            <h3 id="gap-card-title">See what could change the picture.</h3>
+            <p>
+              If there is a projected gap, these figures show three mathematical sensitivities. They are not recommendations—use Edit assumptions to explore the trade-offs yourself.
+            </p>
+          </div>
+          <div className="gap-options">
+            <GapOptionCard
+              label="Additional Monthly Cash"
+              value={formatCurrency(projection.summary.extraMonthlyCashSavingsRequired)}
+              note={`Assumes ${formatPercent(inputs.cashInterestRate)} cash savings rate`}
+              tone="blue"
+            />
+            <GapOptionCard
+              label="Additional Monthly Investing"
+              value={formatCurrency(projection.summary.extraMonthlyInvestmentRequired)}
+              note={`Assumes ${formatPercent(inputs.preRetirementInvestmentReturnRate)} return before retirement`}
+              tone="good"
+            />
+            <GapOptionCard
+              label="Monthly Spending Difference"
+              value={formatCurrency(projection.summary.monthlySpendingReductionRequired)}
+              note="Today's monthly spending reduction, inflated by the app over time"
+              tone="warn"
+            />
+          </div>
+        </section>
+
+        <details className="result-disclosure"><summary>What stands out</summary>
+        <section className="insights-card" aria-labelledby="insights-title">
+          <div className="insights-card__header">
+            <div><p className="eyebrow">What stands out</p><h3 id="insights-title">Insights from the assumptions you entered</h3></div>
+            <Sparkles size={24} />
+          </div>
+          <div className="insights-grid">
+            {resultInsights.map((insight) => (
+              <article className={`insight-item insight-item--${insight.tone}`} key={insight.title}>
+                <strong>{insight.title}</strong>
+                <p>{insight.body}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+        </details>
+
+        <details className="result-disclosure"><summary>Other assumptions in this result</summary>
+        <section className="scenario-details-card" aria-labelledby="individual-scenario-details-title">
+          <div><p className="eyebrow">Additional assumptions</p><h2 id="individual-scenario-details-title">What else this result is counting</h2><p>Each item below maps directly to the year-by-year projection. Switch uncertain assumptions off and compare the result before relying on them.</p></div>
+          <div className="scenario-detail-grid">
+            <article><span>One-time event</span><strong>{inputs.includeOneTimeEvents ? inputs.oneTimeEvents[0]?.label ?? "Included" : "Not included"}</strong><small>{inputs.includeOneTimeEvents && inputs.oneTimeEvents[0] ? `${formatCurrency(inputs.oneTimeEvents[0].amount)} ${inputs.oneTimeEvents[0].direction} at age ${inputs.oneTimeEvents[0].age}${inputs.oneTimeEvents[0].certainty === "possible" ? " · Possible" : ""}` : "No event changes this result"}</small></article>
+            <article><span>Other retirement income</span><strong>{inputs.customIncomeStreams[0]?.label ?? "Not included"}</strong><small>{inputs.customIncomeStreams[0] ? `${formatCurrency(inputs.customIncomeStreams[0].amount)}/${inputs.customIncomeStreams[0].frequency === "monthly" ? "month" : "year"} from age ${inputs.customIncomeStreams[0].startAge} to ${inputs.customIncomeStreams[0].endAge}` : "CPF LIFE, SRS and portfolio income remain separately displayed"}</small></article>
+            <article><span>Core assumptions</span><strong>{formatPercent(inputs.retirementSpendingInflationRate)} inflation · {formatPercent(inputs.preRetirementInvestmentReturnRate)} investment return</strong><small>Projection ends at age {inputs.endAge}; retirement investment return is {formatPercent(inputs.retirementReturnRate)}</small></article>
+          </div>
+        </section>
+        </details>
+
+
+
+        <details className="result-disclosure"><summary>How the calculation works</summary>
         <section className="math-card">
           <div className="math-card__intro">
             <Calculator size={24} />
@@ -1401,6 +1445,7 @@ export default function App() {
             <strong>{formatCurrency(projection.summary.estimatedCpfWithdrawableAt55)}</strong>
           </div>
         </section>
+        </details>
 
         <section className="table-card">
           <div className="chart-card__header">
