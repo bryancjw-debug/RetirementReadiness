@@ -19,6 +19,8 @@ export type ContributionCadence = "monthly" | "occasional";
 export type RetirementIncomePreference = "income" | "growth";
 
 export interface OnboardingAnswers {
+  investmentMix?: RetirementInputs["investmentMix"];
+  retirementInvestmentMix?: RetirementInputs["retirementInvestmentMix"];
   unknownBalances?: string[];
   retirementTopUp: RetirementInputs["retirementTopUp"];
   insuranceEstimate: RetirementInputs["insuranceEstimate"];
@@ -97,6 +99,8 @@ export const guidedLifestyleOptions: Array<{
 
 export function createInitialOnboardingAnswers(inputs: RetirementInputs): OnboardingAnswers {
   return {
+    investmentMix: inputs.investmentMix,
+    retirementInvestmentMix: inputs.retirementInvestmentMix,
     retirementTopUp: inputs.retirementTopUp ? { ...inputs.retirementTopUp } : undefined,
     insuranceEstimate: inputs.insuranceEstimate ? { ...inputs.insuranceEstimate } : undefined,
     preferredName: "",
@@ -167,6 +171,8 @@ export function onboardingAnswersToRetirementInputs(
 
   return {
     ...existingDefaults,
+    investmentMix: answers.investmentMix,
+    retirementInvestmentMix: answers.retirementInvestmentMix,
     retirementTopUp: answers.retirementTopUp,
     insuranceEstimate: answers.insuranceEstimate,
     currentAge: answers.currentAge,

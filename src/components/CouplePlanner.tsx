@@ -6,6 +6,8 @@ import { formatCurrency, formatPercent } from "../utils/formatters";
 import { projectHousehold } from "../utils/householdProjection";
 import { CoupleOnboardingWizard } from "./CoupleOnboardingWizard";
 import { HouseholdCpfCosts } from "./HouseholdCpfCosts";
+import { RateAssumptions } from "./RateAssumptions";
+import { ExcelDownload } from "./ExcelDownload";
 
 type CoupleMode = "onboarding" | "processing" | "results" | "edit";
 type ChartView = "combined" | "person-1" | "person-2";
@@ -116,6 +118,8 @@ export function CouplePlanner({ onExit }: { onExit: () => void }) {
 
   return (
     <section className="couple-results results-section" aria-label="Household retirement results">
+      <RateAssumptions value={plan} readiness={projection.summary.readinessPercent} onChange={patch => setPlan(current => ({ ...current, ...patch }))} monthlyContribution={plan.people.reduce((sum, person) => sum + person.inputs.investmentContribution, 0)} />
+      <ExcelDownload household={plan} householdProjection={projection} />
       <div className="summary-strip household-summary-strip">
         <div><span>Household spending begins</span><strong>{projection.summary.retirementStartYear}</strong></div>
         <div><span>{plan.people[0].label}</span><strong>Retires at {plan.people[0].inputs.retirementAge}</strong></div>

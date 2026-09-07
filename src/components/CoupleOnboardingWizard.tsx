@@ -1,4 +1,5 @@
 import { QuizDraftControls } from "./QuizDraftControls";
+import { RateAssumptions } from "./RateAssumptions";
 import { matchesQuizShape } from "../utils/quizDraft";
 import { QuizNumberQuestion as RangeQuestion } from "./QuizNumberQuestion";
 import { QuizProgress } from "./QuizProgress";
@@ -86,7 +87,7 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
   ), [plan.retirementSpendingAnnual, plan.retirementSpendingInflationRate, spendingStartOffset]);
 
   function updatePlan<K extends keyof HouseholdPlan>(key: K, value: HouseholdPlan[K]) {
-    setPlan((current) => ({ ...current, [key]: value }));
+    setPlan((current) => ({ ...current, [key]: value, ...(["currentInvestments", "preRetirementInvestmentReturnRate"].includes(key) ? { investmentMix: undefined } : {}), ...(["retirementReturnRate", "passiveIncomeYieldRate"].includes(key) ? { retirementInvestmentMix: undefined } : {}) }));
   }
 
   function updatePerson(index: 0 | 1, patch: Partial<HouseholdPersonPlan>) {
@@ -197,7 +198,7 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
   }
 
   return (
-    <section className="onboarding-card couple-onboarding" aria-label="Guided couple retirement setup">
+    <section className="onboarding-card couple-onboarding" data-phase={step <= 2 ? 0 : step === 3 ? 1 : step === 4 ? 2 : step <= 7 ? 3 : 4} aria-label="Guided couple retirement setup">
       <QuizProgress chapter={step <= 2 ? 0 : step === 3 ? 1 : step === 4 ? 2 : step <= 7 ? 3 : 4} detail={step === 4 ? `${person.label}: ${cpfParts[cpfPart]} (${cpfPart + 1} of 4)` : stepLabels[step]} />
 
       {step === 0 ? <Step eyebrow="Planning together" title="Let’s place both of you on the same timeline." intro="Each person keeps a separate CPF and SRS journey. Names are optional and stay in this browser.">
@@ -358,18 +359,16 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
       </Step> : null}
 
       {step === 7 ? <Step eyebrow="Optional refinement" title="Would you like to adjust the household planning assumptions?" intro="The starting assumptions are visible and editable. Most users can continue without changing them.">
+        <RateAssumptions value={plan} onChange={patch => setPlan(current => ({ ...current, ...patch }))} monthlyContribution={plan.people.reduce((sum, person) => sum + person.inputs.investmentContribution, 0)} />
         <div className="quiz-choice-grid quiz-choice-grid--two"><ChoiceCard title="Keep the starting assumptions" description={`${plan.retirementSpendingInflationRate}% spending inflation · ${plan.preRetirementInvestmentReturnRate}% investment return before retirement.`} selected={!refineAdvanced} onClick={() => setRefineAdvanced(false)} /><ChoiceCard title="Let us refine them" description="Adjust the rates and planning horizon used by the household calculation." selected={refineAdvanced} onClick={() => setRefineAdvanced(true)} /></div>
         {refineAdvanced ? <div className="advanced-quiz-panel quiz-stack quiz-subsection">
           <div className="couple-person-grid">{plan.people.map((item, index) => <article className={`person-setup-card person-tone-${index + 1}`} key={item.id}><div className="person-card-heading"><strong>{item.label}</strong><span>Planning horizon</span></div><RangeQuestion label={`${possessiveLabel(item.label)} projection end age`} helper="The year-by-year scenario continues to this age." value={item.inputs.endAge} min={Math.max(item.inputs.retirementAge + 1, 80)} max={105} step={1} onChange={(value) => updatePersonInput(index as 0 | 1, "endAge", value)} format={(value) => `Age ${value}`} quickValues={[90, 95, 100]} /></article>)}</div>
-          <RangeQuestion label="Household spending inflation" helper="How quickly the same household lifestyle may cost more." value={plan.retirementSpendingInflationRate} min={0} max={5} step={0.1} onChange={(value) => updatePlan("retirementSpendingInflationRate", value)} format={(value) => `${value.toFixed(1)}%`} quickValues={[2, 2.5, 3]} />
-          <RangeQuestion label="Shared cash return" helper="Annual return assumed for shared cash savings." value={plan.cashInterestRate} min={0} max={5} step={0.1} onChange={(value) => updatePlan("cashInterestRate", value)} format={(value) => `${value.toFixed(1)}%`} quickValues={[0.5, 1, 2]} />
-          <RangeQuestion label="Investment return before retirement" helper="A planning assumption for the shared portfolio, not a guaranteed return." value={plan.preRetirementInvestmentReturnRate} min={0} max={10} step={0.5} onChange={(value) => updatePlan("preRetirementInvestmentReturnRate", value)} format={(value) => `${value.toFixed(1)}%`} quickValues={[3, 5, 7]} />
-          <RangeQuestion label="Investment return during retirement" helper="Kept separate because withdrawals may change how the portfolio is used." value={plan.retirementReturnRate} min={0} max={8} step={0.5} onChange={(value) => updatePlan("retirementReturnRate", value)} format={(value) => `${value.toFixed(1)}%`} quickValues={[1, 3, 5]} />
           <RangeQuestion label="Annual contribution increase" helper="How much both people’s regular shared contributions rise each year." value={plan.annualContributionIncreaseRate} min={0} max={8} step={0.5} onChange={(value) => updatePlan("annualContributionIncreaseRate", value)} format={(value) => `${value.toFixed(1)}%`} quickValues={[0, 2, 3]} />
         </div> : <div className="education-callout"><CircleHelp size={19} /><p>Continuing keeps the displayed starting assumptions. You can return and refine them after seeing the result.</p></div>}
       </Step> : null}
 
       {step === 8 ? <Step eyebrow="Review together" title="Here is the household retirement picture we’ll test." intro="Shared spending, events and non-CPF resources are counted once. CPF, SRS and other income remain attached to each person until the household result layer.">
+        <RateAssumptions value={plan} onChange={patch => setPlan(current => ({ ...current, ...patch }))} monthlyContribution={plan.people.reduce((sum, person) => sum + person.inputs.investmentContribution, 0)} />
         <div className="review-edit-links" aria-label="Edit household answers">{stepLabels.slice(0, 8).map((label, index) => <button type="button" className="secondary-action" key={label} onClick={() => setStep(index)}>Edit {label}</button>)}</div><div className="review-grid">
           <article><span>Household lifestyle</span><strong>{formatCurrency(plan.retirementSpendingAnnual / 12)}/month today</strong><small>{formatCurrency(futureMonthlySpending)}/month when modelled spending begins</small></article>
           <article><span>Shared starting resources</span><strong>{formatCurrency(plan.currentCashSavings + plan.currentInvestments)}</strong><small>{formatCurrency(plan.currentCashSavings)} cash · {formatCurrency(plan.currentInvestments)} invested</small></article>

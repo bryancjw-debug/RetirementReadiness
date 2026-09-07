@@ -19,6 +19,8 @@ export function removeQuizDraft(storage: Pick<Storage, "removeItem">, key: strin
 }
 
 const optionalShapes: Record<string, unknown> = {
+  investmentMix: [{ label: "", amount: 0, returnRate: 0, incomeYield: 0 }],
+  retirementInvestmentMix: [{ label: "", amount: 0, returnRate: 0, incomeYield: 0 }],
   retirementTopUp: { enabled: false, annualAmount: 0, startAge: 30, endAge: 65 },
   insuranceEstimate: { enabled: false, hospitalCover: "none", privatePremiumAnnual: 0, premiumGrowthRate: 0, careShield: false, careShieldPremiumAnnual: 0, careShieldJoinAge: 30, careShieldGrowthRate: 0, supplement: false, supplementPremiumAnnual: 0, supplementEndAge: 100 },
   oneTimeEvents: [{ id: "", label: "", age: 30, amount: 0, direction: "inflow", certainty: "expected" }],

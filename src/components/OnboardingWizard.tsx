@@ -1,4 +1,5 @@
 import { QuizDraftControls } from "./QuizDraftControls";
+import { RateAssumptions } from "./RateAssumptions";
 import { matchesQuizShape } from "../utils/quizDraft";
 import { QuizNumberQuestion as SliderQuestion } from "./QuizNumberQuestion";
 import { QuizProgress } from "./QuizProgress";
@@ -182,7 +183,12 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
   );
 
   function update<K extends keyof OnboardingAnswers>(key: K, value: OnboardingAnswers[K]) {
-    setAnswers((current) => ({ ...current, [key]: value }));
+    setAnswers((current) => ({ ...current, [key]: value, ...(["currentInvestments", "preRetirementInvestmentReturnRate"].includes(key) ? { investmentMix: undefined } : {}), ...(["retirementReturnRate", "passiveIncomeYieldRate", "retirementIncomePreference"].includes(key) ? { retirementInvestmentMix: undefined } : {}) }));
+  }
+
+  function updateRates(patch: Partial<import("./RateAssumptions").RateValues>) {
+    setAnswers(current => ({ ...current, ...patch, refineAssumptions: true }));
+    if (patch.currentInvestments !== undefined) setResourceStatus(current => ({ ...current, investments: "known" }));
   }
 
   function updateCurrentAge(value: number) {
@@ -310,7 +316,7 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
         </div>
       </section>
     ) : (
-    <section className="onboarding-card" aria-label="Guided retirement setup">
+    <section className="onboarding-card" data-phase={chapter} aria-label="Guided retirement setup">
       <QuizProgress chapter={chapter} detail={step === 5 && answers.includeCpf ? `${cpfParts[cpfPart]} (${cpfPart + 1} of 4)` : stepLabels[step]} />
 
       {step === 0 ? (
@@ -520,6 +526,7 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
           {answers.contributionApproach === "none" ? (
             <div className="education-callout"><CircleHelp size={19} /><p>Your initial result will show what the resources already entered may support without assuming additional contributions.</p></div>
           ) : null}
+          <RateAssumptions value={answers} incomeActive={answers.retirementIncomePreference === "income"} monthlyContribution={answers.monthlyInvestmentContribution} onChange={updateRates} />
         </QuestionStep>
       ) : null}
 
@@ -662,27 +669,17 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
             <ChoiceCard title="Dividend income first" description="Count dividends or distributions as retirement income, then draw down assets only for any remaining spending gap." selected={answers.retirementIncomePreference === "income"} onClick={() => update("retirementIncomePreference", "income")} />
             <ChoiceCard title="Capital growth and drawdown" description="Do not assume a separate dividend income stream. Sell or withdraw investments as spending requires." selected={answers.retirementIncomePreference === "growth"} onClick={() => update("retirementIncomePreference", "growth")} />
           </div>
-          {answers.retirementIncomePreference === "income" ? <div className="quiz-subsection">
-            <SliderQuestion label="Expected dividend or distribution yield" helper="Annual cash income from the retirement portfolio. Keep this separate from capital growth to avoid counting the same return twice." value={answers.passiveIncomeYieldRate} min={0} max={8} step={0.25} onChange={(value) => update("passiveIncomeYieldRate", value)} format={(value) => `${value.toFixed(2)}%`} quickValues={[2, 3, 4, 5]} />
-          </div> : <div className="education-callout"><CircleHelp size={19} /><p>The projection will show investment withdrawals instead of dividends. The retirement investment-return assumption still controls portfolio growth.</p></div>}
-          <div className="quiz-subsection"><span className="quiz-subsection__label">Would you like to refine the other assumptions?</span></div>
-          <div className="quiz-choice-grid quiz-choice-grid--two">
-            <ChoiceCard title="Keep the starting assumptions" description={`Inflation ${answers.retirementSpendingInflationRate}% · investments ${answers.preRetirementInvestmentReturnRate}% before retirement.`} selected={!answers.refineAssumptions} onClick={() => update("refineAssumptions", false)} />
-            <ChoiceCard title="Let me refine them" description="Explore rates and the projection horizon without changing the calculation method." selected={answers.refineAssumptions} onClick={() => update("refineAssumptions", true)} />
-          </div>
-          {answers.refineAssumptions ? <div className="quiz-stack quiz-subsection advanced-quiz-panel">
+          <RateAssumptions value={answers} incomeActive={answers.retirementIncomePreference === "income"} monthlyContribution={answers.monthlyInvestmentContribution} onChange={updateRates} />
+          <details className="assumption-details"><summary>Planning horizon and contribution increases</summary><div className="quiz-stack quiz-subsection advanced-quiz-panel">
             <SliderQuestion label="Projection end age" helper="Tests how long the scenario should continue." value={answers.endAge} min={Math.max(answers.retirementAge + 1, 80)} max={105} step={1} onChange={(value) => update("endAge", value)} format={(value) => `Age ${value}`} quickValues={[90, 95, 100]} />
-            <SliderQuestion label="Retirement spending inflation" helper="How quickly the same lifestyle may cost more over time." value={answers.retirementSpendingInflationRate} min={0} max={5} step={0.1} onChange={(value) => update("retirementSpendingInflationRate", value)} format={(value) => `${value.toFixed(1)}%`} quickValues={[2, 2.5, 3]} />
-            <SliderQuestion label="Cash savings return" helper="Annual return assumed for cash savings." value={answers.cashInterestRate} min={0} max={5} step={0.1} onChange={(value) => update("cashInterestRate", value)} format={(value) => `${value.toFixed(1)}%`} quickValues={[0.5, 1, 2]} />
-            <SliderQuestion label="Investment return before retirement" helper="A planning assumption, not a guaranteed return." value={answers.preRetirementInvestmentReturnRate} min={0} max={10} step={0.5} onChange={(value) => update("preRetirementInvestmentReturnRate", value)} format={(value) => `${value.toFixed(1)}%`} quickValues={[3, 5, 7]} />
-            <SliderQuestion label="Investment return during retirement" helper="Kept separate because retirement portfolios and withdrawals may behave differently." value={answers.retirementReturnRate} min={0} max={8} step={0.5} onChange={(value) => update("retirementReturnRate", value)} format={(value) => `${value.toFixed(1)}%`} quickValues={[1, 3, 5]} />
             <SliderQuestion label="Annual contribution increase" helper="How much regular cash and investment contributions rise each year." value={answers.annualContributionIncreaseRate} min={0} max={8} step={0.5} onChange={(value) => update("annualContributionIncreaseRate", value)} format={(value) => `${value.toFixed(1)}%`} quickValues={[0, 2, 3]} />
-          </div> : <div className="education-callout"><CircleHelp size={19} /><p>The assumptions remain visible on the result and can be changed later. Keeping a default is still an active, reviewable choice.</p></div>}
+          </div></details>
         </QuestionStep>
       ) : null}
 
       {step === 8 ? (
         <QuestionStep eyebrow="Review" title="Here is the retirement picture we’ll test." intro="These are planning assumptions, not guaranteed outcomes. You can change them from the detailed editor after seeing the result.">
+          <RateAssumptions value={answers} incomeActive={answers.retirementIncomePreference === "income"} monthlyContribution={answers.monthlyInvestmentContribution} onChange={updateRates} />
           <div className="review-edit-links" aria-label="Edit your answers">{stepLabels.slice(0, 8).map((label, index) => <button type="button" className="secondary-action" key={label} onClick={() => jumpTo(index)}>Edit {label}</button>)}</div>
           {(resourceStatus.cash === "unknown" || resourceStatus.investments === "unknown") ? <p className="education-callout">Some balances are unknown and excluded. Your result will be an incomplete estimate.</p> : null}
           <div className="review-grid">

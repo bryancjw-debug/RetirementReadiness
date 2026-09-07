@@ -12,6 +12,8 @@ export interface HouseholdPersonPlan {
 }
 
 export interface HouseholdPlan {
+  investmentMix?: RetirementInputs["investmentMix"];
+  retirementInvestmentMix?: RetirementInputs["retirementInvestmentMix"];
   mode: "couple";
   people: [HouseholdPersonPlan, HouseholdPersonPlan];
   retirementStart: HouseholdRetirementStart;

@@ -50,6 +50,8 @@ export interface OneTimeFinancialEvent {
 }
 
 export interface RetirementInputs {
+  investmentMix?: import("./utils/investmentMix").InvestmentMixItem[];
+  retirementInvestmentMix?: import("./utils/investmentMix").InvestmentMixItem[];
   retirementTopUp?: { enabled: boolean; annualAmount: number; startAge: number; endAge: number };
   insuranceEstimate?: InsuranceEstimate;
   currentAge: number;

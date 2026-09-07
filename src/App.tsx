@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import "./rates.css";
 import {
   Area,
   AreaChart,
@@ -12,6 +13,8 @@ import {
 } from "recharts";
 import { BadgeCheck, Calculator, Check, CircleAlert, CircleHelp, Moon, Pencil, Plus, RotateCcw, ShieldCheck, Sparkles, Sun, Trash2 } from "lucide-react";
 import { YearTable as ResponsiveYearTable } from "./components/YearTable";
+import { RateAssumptions } from "./components/RateAssumptions";
+import { ExcelDownload } from "./components/ExcelDownload";
 import { OnboardingWizard } from "./components/OnboardingWizard";
 import { CouplePlanner } from "./components/CouplePlanner";
 import { CpfExtrasQuiz } from "./components/CpfExtrasQuiz";
@@ -478,7 +481,7 @@ export default function App() {
   }, [cpfLifeBridgeYears, inputs, projection.rows, monthlyRetirementSpendingToday, projectedMonthlyRetirementSpending]);
 
   function updateInput<K extends keyof RetirementInputs>(key: K, value: RetirementInputs[K]) {
-    setInputs((current) => ({ ...current, [key]: value }));
+    setInputs((current) => ({ ...current, [key]: value, ...(["currentInvestments", "preRetirementInvestmentReturnRate"].includes(key) ? { investmentMix: undefined } : {}), ...(["retirementReturnRate", "passiveIncomeYieldRate", "retirementIncomeMethod"].includes(key) ? { retirementInvestmentMix: undefined } : {}) }));
     const reviewedBalance = key === "currentCashSavings" ? "Cash" : key === "currentInvestments" ? "Investments" : ["cpfOa", "cpfSa", "cpfRa", "cpfMa", "includeCpf"].includes(key) ? "Current CPF" : null;
     if (reviewedBalance) setOnboardingAnswers((current) => current ? { ...current, unknownBalances: current.unknownBalances?.filter((label) => label !== reviewedBalance) } : current);
   }
@@ -642,24 +645,7 @@ export default function App() {
         </div>
       </section>
 
-      {appMode === "results" || appMode === "edit" ? <section className="summary-strip" aria-label="Projection assumptions">
-        <div>
-          <span>Inflation</span>
-          <strong>{formatPercent(inputs.retirementSpendingInflationRate)} p.a.</strong>
-        </div>
-        <div>
-          <span>Cash Savings</span>
-          <strong>{formatPercent(inputs.cashInterestRate)} p.a.</strong>
-        </div>
-        <div>
-          <span>Investments</span>
-          <strong>{formatPercent(inputs.preRetirementInvestmentReturnRate)} p.a.</strong>
-        </div>
-        <div>
-          <span>CPF</span>
-          <strong>{inputs.includeCpf ? "Included" : "Not included"}</strong>
-        </div>
-      </section> : null}
+      {appMode === "results" || appMode === "edit" ? <RateAssumptions value={inputs} readiness={projection.summary.readinessPercent} onChange={patch => { setInputs(current => ({ ...current, ...patch })); if (patch.currentInvestments !== undefined) setOnboardingAnswers(current => current ? { ...current, unknownBalances: current.unknownBalances?.filter(label => label !== "Investments") } : current); }} incomeActive={inputs.retirementIncomeMethod === "passive"} monthlyContribution={inputs.investmentContribution} /> : null}
 
       {appMode === "onboarding" ? (
         <OnboardingWizard onActiveChange={setQuizActive} initialInputs={defaultInputs} onComplete={completeOnboarding} onExploreSample={exploreSample} onPlanTogether={() => setExperienceMode("couple")} />
@@ -1211,6 +1197,7 @@ export default function App() {
 
         {onboardingAnswers?.unknownBalances?.length ? <p className="education-callout" role="status">Incomplete estimate: {onboardingAnswers.unknownBalances.join(", ")} balances were not entered and are excluded. Add these in Edit assumptions before relying on the result.</p> : null}
 
+        <ExcelDownload inputs={inputs} projection={projection} />
         <div className="chart-grid">
           <article className="chart-card">
             <div className="chart-card__header">
@@ -1457,7 +1444,7 @@ export default function App() {
               {showTable ? "Hide Table" : `View ${formatNumber(projection.rows.length)} Rows`}
             </button>
           </div>
-          {showTable ? <ResponsiveYearTable rows={projection.rows} /> : null}
+          {showTable ? <><ExcelDownload inputs={inputs} projection={projection} /><ResponsiveYearTable rows={projection.rows} /></> : null}
         </section>
       </section> : null}
 

@@ -1,0 +1,54 @@
+.rate-assumptions { padding: 24px; margin-block: 18px; border-block: 1px solid var(--line); min-width: 0; background: var(--surface-soft); }
+.rate-assumptions header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.rate-assumptions h3 { margin: 4px 0 18px; font-size: 1.25rem; }
+.rate-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 20px; }
+.rate-summary > div { border-left: 3px solid var(--primary); padding-left: 12px; min-width: 0; }
+.rate-summary > div:nth-child(2) { border-color: #6383bc; }
+.rate-summary > div:nth-child(3) { border-color: #9480b9; }
+.rate-summary > div:nth-child(4) { border-color: #608b73; }
+.rate-summary > div:nth-child(5) { border-color: #ac8553; }
+.rate-summary span, .rate-summary small { display: block; }
+.rate-summary span { font-size: .95rem; font-weight: 650; }
+.rate-summary strong { display: block; font-size: 1.6rem; margin: 8px 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.rate-assumptions small, .rate-assumptions p, .excel-download small { color: var(--muted); line-height: 1.6; font-size: .9rem; }
+.rate-assumptions summary { display: flex; align-items: center; gap: 10px; cursor: pointer; min-height: 48px; font-weight: 650; padding: 10px 0; color: var(--text); }
+.rate-assumptions summary svg { flex-shrink: 0; }
+.rate-assumptions summary:focus-visible, .rate-assumptions input:focus-visible, .rate-assumptions select:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+.rates-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; padding: 16px 0; }
+.rate-assumptions label { display: flex; flex-direction: column; gap: 8px; font-size: 1rem; font-weight: 600; min-width: 0; }
+.rate-assumptions input, .rate-assumptions select { width: 100%; min-width: 0; box-sizing: border-box; padding: 12px; min-height: 48px; font: inherit; color: var(--text); border: 1px solid var(--line-strong); border-radius: 8px; background: var(--input-bg); }
+.rate-assumptions input:disabled { opacity: .6; }
+.mix-row { display: grid; grid-template-columns: minmax(140px, 1fr) repeat(3, minmax(0, 1fr)); gap: 18px; align-items: start; padding-block: 18px; border-bottom: 1px solid var(--line); }
+.mix-row h4 { margin: 8px 0; }
+.mix-result { padding-block: 16px; border-block: 1px solid var(--line); }
+.rate-assumptions .mix-confirm { flex-direction: row; align-items: start; padding-block: 16px; line-height: 1.6; }
+.rate-assumptions .mix-confirm input { width: 24px; height: 24px; min-height: 24px; flex-shrink: 0; }
+.excel-download { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-block: 20px; }
+.excel-download [role="status"] { width: 100%; font-size: .9rem; }
+.onboarding-card { --phase-accent: #557fa5; }
+.onboarding-card[data-phase="1"] { --phase-accent: #427f79; }
+.onboarding-card[data-phase="2"] { --phase-accent: #85709e; }
+.onboarding-card[data-phase="3"] { --phase-accent: #926e47; }
+.onboarding-card[data-phase="4"] { --phase-accent: #58758d; }
+:root[data-theme="dark"] .onboarding-card { --phase-accent: #94b9db; }
+:root[data-theme="dark"] .onboarding-card[data-phase="1"] { --phase-accent: #84bbb1; }
+:root[data-theme="dark"] .onboarding-card[data-phase="2"] { --phase-accent: #b5a0cf; }
+:root[data-theme="dark"] .onboarding-card[data-phase="3"] { --phase-accent: #c6a87c; }
+.onboarding-card .quiz-progress { border-top: 3px solid var(--phase-accent); padding-top: 16px; }
+.quiz-progress__top > span { display: inline-flex; align-items: center; gap: 10px; }
+.quiz-progress__top svg { color: var(--phase-accent, var(--primary)); flex-shrink: 0; }
+.onboarding-card .quiz-step > .eyebrow { color: var(--phase-accent); }
+.onboarding-card .quiz-chapters [aria-current="step"], .onboarding-card .quiz-choice.is-selected { background: color-mix(in srgb, var(--phase-accent) 10%, var(--surface)); border-color: var(--phase-accent); }
+.onboarding-card .quiz-choice.is-selected { box-shadow: inset 3px 0 var(--phase-accent); }
+@media (max-width: 1000px) { .rate-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } .mix-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } .mix-row h4 { grid-column: 1 / -1; } }
+@media (max-width: 600px) {
+  .rate-assumptions { padding: 18px 12px; }
+  .rate-summary { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .rate-summary > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; }
+  .rate-summary small { grid-column: 1 / -1; }
+  .rate-summary strong { font-size: 1.25rem; margin: 0; }
+  .rates-fields, .mix-row { grid-template-columns: minmax(0, 1fr); }
+  .rate-assumptions h3 { font-size: 1.15rem; }
+  .rate-assumptions label, .rate-assumptions input, .rate-assumptions select { font-size: 1rem; }
+  .rate-assumptions button { white-space: normal; min-height: 48px; }
+}
