@@ -429,7 +429,7 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
       {step === 3 ? (
         <QuestionStep eyebrow="What you have today" title="What resources are already intended for your future?" intro="Include money you expect to remain available for retirement. Exclude emergency money or funds already committed to a near-term purchase.">
           <div className="quiz-stack">
-            <div className="resource-question"><h3>Cash savings</h3>
+            <div className="resource-question" data-category="cash"><h3>Cash savings</h3>
               <ResourceChoiceGroup label="Cash balance availability" value={resourceStatus.cash} onChange={(value) => {
                 setResourceStatus((current) => ({ ...current, cash: value }));
                 if (value !== "known") update("currentCashSavings", 0);
@@ -448,7 +448,7 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
             />
               </> : resourceStatus.cash === "unknown" ? <p>Not entered. This balance will be excluded until you add it.</p> : null}
             </div>
-            <div className="resource-question"><h3>Retirement investments</h3>
+            <div className="resource-question" data-category="investments"><h3>Retirement investments</h3>
               <ResourceChoiceGroup label="Investment balance availability" value={resourceStatus.investments} onChange={(value) => {
                 setResourceStatus((current) => ({ ...current, investments: value }));
                 if (value !== "known") update("currentInvestments", 0);
@@ -498,6 +498,7 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
               {answers.contributionApproach !== "invest" ? (
                 <SliderQuestion
                   label={answers.contributionCadence === "occasional" ? "Average monthly cash amount" : "Monthly cash amount"}
+                  category="cash"
                   helper={answers.contributionCadence === "occasional" ? "Convert irregular deposits into a rough monthly average." : "Amount normally added to cash savings each month."}
                   value={answers.monthlyCashContribution}
                   min={0}
@@ -511,6 +512,7 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
               {answers.contributionApproach !== "cash" ? (
                 <SliderQuestion
                   label={answers.contributionCadence === "occasional" ? "Average monthly investment amount" : "Monthly investment amount"}
+                  category="investments"
                   helper={answers.contributionCadence === "occasional" ? "Convert irregular investments into a rough monthly average." : "Amount normally invested each month."}
                   value={answers.monthlyInvestmentContribution}
                   min={0}

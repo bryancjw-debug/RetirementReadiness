@@ -1,8 +1,9 @@
 import { useId, useState, type CSSProperties } from "react";
 
-export function QuizNumberQuestion({ label, helper, value, min, max, step, onChange, format = String }: {
+export function QuizNumberQuestion({ label, helper, value, min, max, step, onChange, format = String, category }: {
   label: string; helper: string; value: number; min: number; max: number; step: number;
   onChange: (value: number) => void; format?: (value: number) => string; quickValues?: number[];
+  category?: "cash" | "investments" | "cpf";
 }) {
   const id = useId();
   const [draft, setDraft] = useState<string | null>(null);
@@ -10,7 +11,7 @@ export function QuizNumberQuestion({ label, helper, value, min, max, step, onCha
   const normalize = (n: number) => Math.max(min, Math.min(max, wholeYears ? Math.round(n) : n));
   const progress = Math.min(100, Math.max(0, (value - min) / Math.max(1, max - min) * 100));
   const invalid = draft !== null && (draft.trim() === "" || !Number.isFinite(Number(draft)) || Number(draft) < min || Number(draft) > max);
-  return <div className="quiz-slider-block">
+  return <div className="quiz-slider-block" data-category={category}>
     <div className="quiz-slider-block__header">
       <div><label htmlFor={id}>{label}</label><p id={`${id}-help`}>{helper}</p></div>
       <div className="quiz-number-answer">
