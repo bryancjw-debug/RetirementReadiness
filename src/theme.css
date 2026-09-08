@@ -93,10 +93,10 @@
   --person-2: #c4a4ed;
   --person-2-soft: #3e304f;
   --on-primary: #20242b;
-  --cash-header: #b3bfd1;
-  --investment-header: #8aafff;
-  --cpf-header: #8bc5cf;
-  --header-text: #20242b;
+  --cash-header: #303844;
+  --investment-header: #2b3b57;
+  --cpf-header: #273d40;
+  --header-text: #f3f4f7;
   --assumption-bg: #3d372b;
   --assumption-accent: #e4c583;
 }
@@ -124,6 +124,18 @@ body::after { display: none; }
 .quiz-slider-block[data-category] .quiz-slider-block__header p, .cpf-balance-grid .quiz-slider-block__header p { color: #39495b; }
 .quiz-slider-block[data-category] .quiz-number-answer span, .cpf-balance-grid .quiz-number-answer span { color: #39495b; }
 .quiz-number-answer input { border-color: var(--line-strong); }
+.quiz-slider-block__header label { color: inherit; }
+:root[data-theme="dark"] .quiz-slider-block[data-category] .quiz-slider-block__header p,
+:root[data-theme="dark"] .cpf-balance-grid .quiz-slider-block__header p,
+:root[data-theme="dark"] .quiz-slider-block[data-category] .quiz-number-answer span,
+:root[data-theme="dark"] .cpf-balance-grid .quiz-number-answer span { color: #c7d3de; }
+.cpf-planning-preview { border-block: 1px solid var(--line); padding-block: 18px; min-width: 0; }
+.cpf-planning-preview dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.cpf-planning-preview dt, .cpf-planning-preview small { color: var(--muted); }
+.cpf-planning-preview dd { margin: 8px 0; font-weight: 700; overflow-wrap: anywhere; }
+.cpf-planning-preview small { display: block; }
+.cpf-input-warning { padding: 12px 16px; border-left: 3px solid var(--amber); background: var(--assumption-bg); color: var(--text); }
+@media (max-width: 480px) { .cpf-planning-preview dl { grid-template-columns: 1fr; gap: 12px; } }
 .resource-choice.is-selected .resource-choice__indicator, .quiz-choice.is-selected .quiz-choice__check { color: var(--on-primary); }
 .rate-assumptions { background: var(--assumption-bg); border-color: var(--assumption-accent); }
 .rate-assumptions .eyebrow { color: var(--assumption-accent); }

@@ -16,7 +16,7 @@ import {
   sanitizeInputs,
   srsContributionCap
 } from "./projection";
-import { insuranceForYear } from "./insurance";
+import { insuranceForYear, additionalInsuranceCashExpense } from "./insurance";
 
 type PersonState = {
   cpf: CpfState;
@@ -30,6 +30,7 @@ export interface HouseholdPersonYear {
   cpfMaMedicalPremium: number;
   insurancePremiumTotal: number;
   insuranceCashPremium: number;
+  insuranceCashExpense: number;
   housingCashPayment: number;
   id: HouseholdPersonPlan["id"];
   label: string;
@@ -282,6 +283,7 @@ export function projectHousehold(rawPlan: HouseholdPlan): HouseholdProjection {
         cpfMaMedicalPremium,
         insurancePremiumTotal: insurance.total,
         insuranceCashPremium: insurance.total - cpfMaMedicalPremium,
+        insuranceCashExpense: additionalInsuranceCashExpense(inputs, age, cpfMaMedicalPremium),
         housingCashPayment: mortgage - oaHousing,
         id: person.id,
         label: person.label,
@@ -309,7 +311,7 @@ export function projectHousehold(rawPlan: HouseholdPlan): HouseholdProjection {
     });
 
     const eventTotals = householdEventTotals(plan, ages[0]);
-    const extraCashCosts = personRows.reduce((sum, row) => sum + row.insuranceCashPremium + row.housingCashPayment, 0);
+    const extraCashCosts = personRows.reduce((sum, row) => sum + row.insuranceCashExpense + row.housingCashPayment, 0);
     const eligibleTopups = plan.people.map((person, index) => retirementTopUpForYear(person.inputs, { ...states[index].cpf }, ages[index], Infinity).applied);
     const topupTotal = eligibleTopups.reduce((sum, amount) => sum + amount, 0);
     const topupBudget = Math.min(topupTotal, Math.max(0, cash + cashContribution + eventTotals.inflow - extraCashCosts - eventTotals.outflow));

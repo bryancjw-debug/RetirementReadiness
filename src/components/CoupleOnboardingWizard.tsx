@@ -11,6 +11,7 @@ import type { CpfLifePlan, CpfPrRateType, CpfPrYear, CpfWorkStatus, CustomIncome
 import { formatCurrency } from "../utils/formatters";
 import { srsContributionCap, srsPrescribedRetirementAge } from "../utils/projection";
 import { CpfExtrasQuiz } from "./CpfExtrasQuiz";
+import { CpfPlanningPreview, MedisaveBalanceQuestion } from "./CpfPlanningPreview";
 
 interface CoupleOnboardingWizardProps {
   initialPlan: HouseholdPlan;
@@ -264,6 +265,7 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
               {cpfPart === 0 ? <>
               <div className="quiz-subsection"><span className="quiz-subsection__label">Current CPF work status</span><div className="quiz-choice-grid quiz-choice-grid--three">{(["Employed", "Self-employed", "Not contributing"] as CpfWorkStatus[]).map((option) => <ChoiceCard compact key={option} title={option} selected={person.inputs.cpfWorkStatus === option} onClick={() => updatePersonInput(activePerson, "cpfWorkStatus", option)} />)}</div></div>
               {person.inputs.cpfWorkStatus === "Employed" ? <RangeQuestion label="Gross monthly income" helper="Used to estimate this person’s employee and employer CPF contributions, subject to CPF limits." value={person.inputs.grossMonthlyIncome} min={0} max={20_000} step={250} onChange={(value) => updatePersonInput(activePerson, "grossMonthlyIncome", value)} format={(value) => `${formatCurrency(value)}/mo`} quickValues={[3_000, 5_000, 8_000, 12_000]} /> : null}
+              <CpfPlanningPreview inputs={person.inputs} />
               {person.inputs.cpfWorkStatus === "Self-employed" ? <div className="quiz-stack quiz-subsection self-employed-cpf-panel">
                 <RangeQuestion label="Annual Net Trade Income declared to IRAS" helper="Mandatory MediSave is based on this annual NTI and age, not an employee monthly CPF rate." value={person.inputs.selfEmployedNetTradeIncomeAnnual} min={0} max={200_000} step={1_000} onChange={(value) => { updatePersonInput(activePerson, "selfEmployedNetTradeIncomeAnnual", value); updatePersonInput(activePerson, "grossMonthlyIncome", value / 12); }} format={(value) => `${formatCurrency(value)}/year`} quickValues={[6_000, 18_000, 48_000, 72_000, 96_000]} />
                 <RangeQuestion label="Optional yearly CPF top-up" helper="Top-up to all three accounts. The projection caps total mandatory and voluntary CPF at $37,740 a year." value={person.inputs.selfEmployedVoluntaryCpfAnnual} min={0} max={37_740} step={500} onChange={(value) => updatePersonInput(activePerson, "selfEmployedVoluntaryCpfAnnual", value)} format={(value) => `${formatCurrency(value)}/year`} quickValues={[0, 6_000, 12_000, 24_000, 37_740]} />
@@ -280,7 +282,7 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
                 {person.inputs.currentAge < 55
                   ? <RangeQuestion label="CPF SA" helper="Current Special Account balance. RA will form at age 55." value={person.inputs.cpfSa} min={0} max={500_000} step={5_000} onChange={(value) => updatePersonInput(activePerson, "cpfSa", value)} format={(value) => formatCurrency(value, { compact: value >= 100_000 })} quickValues={[0, 25_000, 50_000, 100_000, 250_000]} />
                   : <RangeQuestion label="CPF RA" helper="At age 55 or above, use the current Retirement Account balance." value={person.inputs.cpfRa} min={0} max={700_000} step={5_000} onChange={(value) => updatePersonInput(activePerson, "cpfRa", value)} format={(value) => formatCurrency(value, { compact: value >= 100_000 })} quickValues={[0, 50_000, 110_000, 220_000, 440_000]} />}
-                <RangeQuestion label="CPF MA" helper="Current MediSave Account balance; not treated as general retirement spending money." value={person.inputs.cpfMa} min={0} max={150_000} step={5_000} onChange={(value) => updatePersonInput(activePerson, "cpfMa", value)} format={(value) => formatCurrency(value, { compact: value >= 100_000 })} quickValues={[0, 25_000, 50_000, 79_000]} />
+                <MedisaveBalanceQuestion currentAge={person.inputs.currentAge} value={person.inputs.cpfMa} onChange={(value) => updatePersonInput(activePerson, "cpfMa", value)} />
               </div> : null}
               </> : null}
               {cpfPart === 2 ? <>
@@ -288,6 +290,7 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
                 <RangeQuestion label="Monthly OA used for mortgage" helper="Enter zero if this person does not use OA for housing instalments." value={person.inputs.cpfOaHousingMonthly} min={0} max={8_000} step={100} onChange={(value) => updatePersonInput(activePerson, "cpfOaHousingMonthly", value)} format={(value) => `${formatCurrency(value)}/month`} quickValues={[0, 500, 1_000, 1_500, 2_500]} />
                 {person.inputs.cpfOaHousingMonthly > 0 ? <RangeQuestion label="OA mortgage deductions end" helper="Expected age when this person’s OA-funded loan payments stop." value={person.inputs.cpfOaHousingEndAge} min={person.inputs.currentAge} max={person.inputs.endAge} step={1} onChange={(value) => updatePersonInput(activePerson, "cpfOaHousingEndAge", value)} format={(value) => `Age ${value}`} quickValues={[55, 60, 65, 70]} /> : null}
               </div>
+              <CpfPlanningPreview housing inputs={person.inputs} />
               <CpfExtrasQuiz section="insurance" key={person.id} value={person.inputs} onChange={(patch) => updatePerson(activePerson, { inputs: { ...person.inputs, ...patch } })} />
               </> : null}
               {cpfPart === 3 ? <>
@@ -378,7 +381,7 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
         <div className="couple-person-grid quiz-subsection">{plan.people.map((item, index) => <article className={`person-review-card person-tone-${index + 1}`} key={item.id}>
           <div className="person-card-heading"><strong>{item.label}</strong><span>Age {item.inputs.currentAge}</span></div>
           <dl><div><dt>Retirement age</dt><dd>{item.inputs.retirementAge}</dd></div><div><dt>Monthly contributions</dt><dd>{formatCurrency(item.inputs.cashSavingsContribution + item.inputs.investmentContribution)}</dd></div><div><dt>CPF</dt><dd>{item.inputs.includeCpf ? "Included" : "Not included"}</dd></div><div><dt>SRS</dt><dd>{item.inputs.includeSrs ? `${formatCurrency(item.inputs.srsCurrentBalance)} now` : "Not included"}</dd></div><div><dt>Other income</dt><dd>{item.inputs.customIncomeStreams.length ? `${formatCurrency(item.inputs.customIncomeStreams[0].amount)}/mo` : "Not included"}</dd></div></dl>
-          <p>{item.inputs.includeCpf && item.inputs.retirementTopUp?.enabled ? `${formatCurrency(item.inputs.retirementTopUp.annualAmount)}/year retirement-only top-up.` : "No retirement-only top-up."} {item.inputs.includeCpf && item.inputs.insuranceEstimate?.enabled ? "Insurance premium estimate included; cash premiums are extra expenses." : "No age-based premium estimate."}</p>
+          <p>{item.inputs.includeCpf && item.inputs.retirementTopUp?.enabled ? `${formatCurrency(item.inputs.retirementTopUp.annualAmount)}/year retirement-only top-up.` : "No retirement-only top-up."} {item.inputs.includeCpf && item.inputs.insuranceEstimate?.enabled ? "Insurance included according to this person's cash-budget choices." : "No age-based premium estimate."}</p>
         </article>)}</div>
         <div className="assumption-note"><Sparkles size={20} /><p>This focused retirement model runs until the younger person reaches age {Math.max(...plan.people.map((item) => item.inputs.endAge))}. It excludes property, insurance benefit payouts, tax optimisation, estate planning and employment income available for household spending. Optional insurance premiums are expenses, not a coverage assessment. Broader planning belongs in a tool such as Common Cents.</p></div>
       </Step> : null}

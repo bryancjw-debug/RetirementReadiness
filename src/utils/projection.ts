@@ -12,7 +12,7 @@ import type {
   RetirementSummary,
   RetirementYear
 } from "../types";
-import { insuranceDefaults, insuranceForYear, normalizeInsurance } from "./insurance";
+import { insuranceDefaults, insuranceForYear, normalizeInsurance, additionalInsuranceCashExpense } from "./insurance";
 
 export const CURRENT_POLICY_YEAR = 2026;
 const CPF_ANNUAL_CAP_2026 = 37_740;
@@ -168,6 +168,11 @@ export function bhsForYear(year: number) {
 
 export function projectionYear(inputs: RetirementInputs, age: number) {
   return CURRENT_POLICY_YEAR + Math.max(0, age - inputs.currentAge);
+}
+
+export function applicableBhs(currentAge: number, age = currentAge) {
+  // BHS freezes in the year a member turns 65, including existing older cohorts.
+  return bhsForYear(CURRENT_POLICY_YEAR + Math.min(age, 65) - currentAge);
 }
 
 export function progressedCpfPrYear(startingYear: CpfPrYear, yearsFromStart: number): CpfPrYear {
@@ -815,8 +820,7 @@ export function routeRetirementAllocation(inputs: RetirementInputs, cpf: CpfStat
 }
 
 export function applyMedisaveCap(inputs: RetirementInputs, cpf: CpfState, age: number) {
-  const capYear = projectionYear(inputs, age >= 65 ? 65 : age);
-  const cap = bhsForYear(capYear);
+  const cap = applicableBhs(inputs.currentAge, age);
   if (cpf.ma <= cap) return 0;
   const overflow = cpf.ma - cap;
   cpf.ma = cap;
@@ -912,9 +916,10 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     const cpfMaMedicalPremium = Math.min(cpf.ma, insurance.medisaveEligible);
     cpf.ma -= cpfMaMedicalPremium;
     const insuranceCashPremium = insurance.total - cpfMaMedicalPremium;
+    const insuranceCashExpense = additionalInsuranceCashExpense(inputs, age, cpfMaMedicalPremium);
     const topUp = retirementTopUpForYear(inputs, cpf, age, cashBalance
       + calculateAnnualContribution(inputs, age, inputs.cashSavingsContribution) + eventTotals.inflow
-      - insuranceCashPremium - housingCashPayment - eventTotals.outflow);
+      - insuranceCashExpense - housingCashPayment - eventTotals.outflow);
 
     const selectedCpfRetirementSum = inputs.includeCpf
       ? cpfTargetForChoice(inputs.cpfRetirementSum, projectionYear(inputs, Math.max(age, 55)))
@@ -939,7 +944,7 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       : 0;
     const customIncomeGenerated = phase === "retirement" ? calculateCustomIncome(inputs, age) : 0;
     const healthcareCost = calculateHealthcareCost(inputs, age);
-    const spendingNeed = calculateSpendingNeed(inputs, age) + healthcareCost + insuranceCashPremium + housingCashPayment;
+    const spendingNeed = calculateSpendingNeed(inputs, age) + healthcareCost + insuranceCashExpense + housingCashPayment;
     const retirementIncomeBeforeSrs = phase === "retirement"
       ? passiveIncomeGenerated + cpfLifeIncome + customIncomeGenerated
       : 0;
@@ -1007,6 +1012,7 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
       cpfRetirementTopUpUnfilled: topUp.unfilled,
       insurancePremiumTotal: insurance.total,
       insuranceCashPremium,
+      insuranceCashExpense,
       housingCashPayment,
       age,
       yearIndex: age - inputs.currentAge,

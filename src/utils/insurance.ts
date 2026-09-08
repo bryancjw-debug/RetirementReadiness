@@ -1,6 +1,8 @@
 import type { InsuranceEstimate, RetirementInputs } from "../types";
 
 export const insuranceDefaults: InsuranceEstimate = {
+  privatePremiumMode: "allowance", cashPremiumsInSavings: true,
+  cashPremiumsInRetirementSpending: false,
   enabled: false, hospitalCover: "medishield", privatePremiumAnnual: 600,
   premiumGrowthRate: 3, careShield: false, careShieldPremiumAnnual: 400,
   careShieldJoinAge: 30, careShieldGrowthRate: 4, supplement: false,
@@ -12,7 +14,12 @@ const positive = (value: number, fallback = 0) => Number.isFinite(value) ? Math.
 export function normalizeInsurance(value?: InsuranceEstimate): InsuranceEstimate {
   const v = { ...insuranceDefaults, ...value };
   return {
-    ...v, enabled: Boolean(v.enabled), careShield: Boolean(v.careShield), supplement: Boolean(v.supplement),
+    ...v,
+    // Older saved plans retain their explicit premiums and additive cash treatment.
+    privatePremiumMode: value && !value.privatePremiumMode ? "actual" : v.privatePremiumMode,
+    cashPremiumsInSavings: value ? Boolean(value.cashPremiumsInSavings) : true,
+    cashPremiumsInRetirementSpending: Boolean(v.cashPremiumsInRetirementSpending),
+    enabled: Boolean(v.enabled), careShield: Boolean(v.careShield), supplement: Boolean(v.supplement),
     hospitalCover: ["none", "medishield", "integrated"].includes(v.hospitalCover) ? v.hospitalCover : "medishield",
     privatePremiumAnnual: positive(v.privatePremiumAnnual),
     premiumGrowthRate: Math.min(20, positive(v.premiumGrowthRate, 3)),
@@ -46,9 +53,10 @@ export function insuranceForYear(inputs: RetirementInputs, age: number) {
   const msl = settings.hospitalCover === "none" ? 0 : medishieldPremium(age) * repricing;
   // An age-band proxy, not an insurer quotation. User's current private premium
   // is scaled with the national age curve plus the stated repricing assumption.
+  const awl = integratedShieldWithdrawalLimit(age);
   const privatePremium = settings.hospitalCover === "integrated"
-    ? settings.privatePremiumAnnual * medishieldPremium(age) / medishieldPremium(inputs.currentAge) * repricing : 0;
-  const awl = age + 1 <= 40 ? 300 : age + 1 <= 70 ? 600 : 900;
+    ? settings.privatePremiumMode === "allowance" ? awl
+      : settings.privatePremiumAnnual * medishieldPremium(age) / medishieldPremium(inputs.currentAge) * repricing : 0;
   const careEndAge = Math.max(67, settings.careShieldJoinAge + 9);
   const care = settings.careShield && age >= settings.careShieldJoinAge && age <= careEndAge
     ? settings.careShieldPremiumAnnual * (1 + settings.careShieldGrowthRate / 100) **
@@ -57,4 +65,18 @@ export function insuranceForYear(inputs: RetirementInputs, age: number) {
   const total = msl + privatePremium + care + supplement;
   const medisaveEligible = msl + Math.min(privatePremium, awl) + care + Math.min(supplement, 600);
   return { total, medisaveEligible, cashRequired: Math.max(0, total - medisaveEligible) };
+}
+
+export function integratedShieldWithdrawalLimit(age: number) {
+  return age + 1 <= 40 ? 300 : age + 1 <= 70 ? 600 : 900;
+}
+
+// Ordinary cash premiums may already be budgeted. An unexpected MA shortfall
+// is additional cash spending in either phase and must never disappear.
+export function additionalInsuranceCashExpense(inputs: RetirementInputs, age: number, paidFromMa: number) {
+  const premium = insuranceForYear(inputs, age);
+  const settings = normalizeInsurance(inputs.insuranceEstimate);
+  const included = settings.enabled && (age < inputs.retirementAge
+    ? settings.cashPremiumsInSavings : settings.cashPremiumsInRetirementSpending);
+  return (included ? 0 : premium.cashRequired) + Math.max(0, premium.medisaveEligible - paidFromMa);
 }

@@ -56,6 +56,7 @@ const columnsByPreset: Record<TablePreset, Column[]> = {
     { key: "total", label: "Total Annual Premium", value: (row) => money(row.insurancePremiumTotal) },
     { key: "ma-paid", label: "Paid From MediSave", value: (row) => money(row.cpfMaMedicalPremium) },
     { key: "cash", label: "Cash Premium Required", value: (row) => money(row.insuranceCashPremium) },
+    { key: "cash-extra", label: "Additional Cash Expense", value: (row) => money(row.insuranceCashExpense) },
     { key: "ma", label: "Ending MediSave", value: (row) => money(row.cpfMa) },
     { key: "housing-cash", label: "Mortgage Cash Remainder", value: (row) => money(row.housingCashPayment) }
   ],
@@ -110,7 +111,7 @@ export function YearTable({ rows }: { rows: RetirementYear[] }) {
       </div>
 
       <p className="year-data-note">
-        {preset === "Insurance" ? "Premiums are annual estimates, split between actual MediSave use and the cash amount required. Cash premiums and any mortgage remainder are included in spending; if assets cannot cover them they become an unfunded shortfall. Balances are year-end values."
+        {preset === "Insurance" ? "Premiums are annual estimates. Additional Cash Expense excludes ordinary cash premiums already included in your savings or spending budget, but includes any unpaid MediSave portion. In allowance mode, private IP cash premiums are not estimated. Mortgage cash remains a separate expense. Balances are year-end values."
           : preset === "CPF" ? "Balances are at year end. Contributions exclude the separately shown retirement cash top-up. Top-ups are limited by cash and estimated FRS/ERS headroom; unfilled amounts are not credited. Annual timing and existing RA principal are approximations, not CPF account statements."
           : "Values are annual flows or end-of-year balances. SRS tax is an estimate based on 50% of a qualifying withdrawal being taxable and assumes no other taxable income."}
       </p>

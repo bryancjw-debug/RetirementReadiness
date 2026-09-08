@@ -121,7 +121,7 @@ describe("simple insurance estimate", () => {
 
   it.each([[39, 300], [40, 600], [69, 600], [70, 900]])("applies the private IP withdrawal limit at age %s", (age, limit) => {
     const yearly = insuranceForYear({ ...base, currentAge: age, insuranceEstimate: { ...insuranceDefaults,
-      enabled: true, hospitalCover: "integrated", privatePremiumAnnual: 2_000, premiumGrowthRate: 0 } }, age);
+      enabled: true, hospitalCover: "integrated", privatePremiumMode: "actual", privatePremiumAnnual: 2_000, premiumGrowthRate: 0 } }, age);
     expect(yearly.medisaveEligible).toBe(medishieldPremium(age) + limit);
     expect(yearly.cashRequired).toBe(2_000 - limit);
   });

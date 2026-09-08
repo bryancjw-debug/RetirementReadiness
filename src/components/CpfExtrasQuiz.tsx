@@ -67,7 +67,7 @@ export function CpfExtrasQuiz({ value, onChange, section = "all" }: { value: Cpf
 
     {section !== "topup" ? <section className="quiz-subsection" aria-label="Insurance premium estimates">
       <h3>Include a simple estimate of health-insurance premiums?</h3>
-      <p className="cpf-question-note">Premiums reduce MediSave first within approved limits. The cash remainder is an additional expense, so leave it out of your lifestyle budget and enter savings before these extra deductions.</p>
+      <p className="cpf-question-note">Premiums reduce MediSave within approved limits. Tell us whether ordinary cash premiums are already in your budget to avoid counting them twice.</p>
       <div className="quiz-choice-grid quiz-choice-grid--two">
         <Choice selected={!insurance.enabled} onClick={() => updateInsurance({ enabled: false })}><strong>{value.cpfMaMedicalPremiumAnnual > 0 ? "Keep my entered MA amount" : "Not for now"}</strong><small>{value.cpfMaMedicalPremiumAnnual > 0 ? `${formatCurrency(value.cpfMaMedicalPremiumAnnual)} yearly; fixed legacy estimate.` : "No extra insurance expense added."}</small></Choice>
         <Choice selected={insurance.enabled} onClick={() => updateInsurance({ enabled: true })}><strong>Estimate my premiums</strong><small>Age-based hospital cover and optional long-term care.</small></Choice>
@@ -81,7 +81,14 @@ export function CpfExtrasQuiz({ value, onChange, section = "all" }: { value: Cpf
             <Choice selected={insurance.hospitalCover === "none"} onClick={() => updateInsurance({ hospitalCover: "none" })}><strong>Exclude hospital premiums</strong></Choice>
           </div>
         </fieldset>
-        {insurance.hospitalCover === "integrated" ? <NumberAnswer label="Current private IP premium, excluding MediShield Life and riders" value={insurance.privatePremiumAnnual} onChange={(n) => updateInsurance({ privatePremiumAnnual: n })} /> : null}
+        {insurance.hospitalCover === "integrated" ? <>
+          <fieldset className="cpf-question-group"><legend>How should we estimate the private IP portion?</legend><div className="quiz-choice-grid quiz-choice-grid--two">
+            <Choice selected={insurance.privatePremiumMode === "allowance"} onClick={() => updateInsurance({ privatePremiumMode: "allowance" })}><strong>Use full MediSave allowance</strong><small>Simple age-based estimate</small></Choice>
+            <Choice selected={insurance.privatePremiumMode === "actual"} onClick={() => updateInsurance({ privatePremiumMode: "actual" })}><strong>Enter my current premium</strong><small>More personalised estimate</small></Choice>
+          </div></fieldset>
+          <p className="cpf-question-note">Private IP allowance: $300/year through age next birthday 40, $600 from 41 to 70, $900 from 71. MediShield Life is estimated separately. The allowance is a withdrawal limit, not your actual premium; any private cash premium and riders must be included in your budget when using this simple estimate.</p>
+          {insurance.privatePremiumMode === "actual" ? <NumberAnswer label="Current private IP premium, excluding MediShield Life and riders" value={insurance.privatePremiumAnnual} onChange={(n) => updateInsurance({ privatePremiumAnnual: n })} /> : null}
+        </> : null}
         <fieldset className="cpf-question-group"><legend>Are you paying for CareShield Life?</legend><div className="quiz-choice-grid quiz-choice-grid--two">
           <Choice selected={!insurance.careShield} onClick={() => updateInsurance({ careShield: false })}><strong>No / leave out</strong></Choice>
           <Choice selected={insurance.careShield} onClick={() => updateInsurance({ careShield: true })}><strong>Yes, include premiums</strong></Choice>
@@ -93,8 +100,16 @@ export function CpfExtrasQuiz({ value, onChange, section = "all" }: { value: Cpf
         </div></fieldset>
         {insurance.supplement ? <><NumberAnswer label="Supplement annual premium" value={insurance.supplementPremiumAnnual} onChange={(n) => updateInsurance({ supplementPremiumAnnual: n })} />
           <p className="cpf-question-note">Starts at $600 as a planning placeholder. MediSave use is capped at $600 per insured per year across all supplements, not per policy. Any excess is cash. A level premium is assumed; confirm your policy terms.</p></> : null}
-        <dl className="cpf-premium-preview" aria-live="polite"><div><dt>Estimated annual premium now</dt><dd>{formatCurrency(preview.total)}</dd></div><div><dt>Eligible for MediSave</dt><dd>{formatCurrency(preview.medisaveEligible)}</dd></div><div><dt>Cash above withdrawal limits</dt><dd>{formatCurrency(preview.cashRequired)}</dd></div></dl>
-        <p className="cpf-question-note">If MediSave runs out, the projection funds the remaining premium from cash. No family support, subsidies, disability claims or premium waivers are assumed. The estimate replaces any old flat MA-premium input, not adds to it.</p>
+        <fieldset className="cpf-question-group"><legend>Are cash premiums already deducted from your monthly savings?</legend><div className="quiz-choice-grid quiz-choice-grid--two">
+          <Choice selected={Boolean(insurance.cashPremiumsInSavings)} onClick={() => updateInsurance({ cashPremiumsInSavings: true })}><strong>Yes, savings are after premiums</strong></Choice>
+          <Choice selected={!insurance.cashPremiumsInSavings} onClick={() => updateInsurance({ cashPremiumsInSavings: false })}><strong>No, deduct premiums separately</strong></Choice>
+        </div></fieldset>
+        <fieldset className="cpf-question-group"><legend>Will retirement spending already include cash premiums?</legend><div className="quiz-choice-grid quiz-choice-grid--two">
+          <Choice selected={Boolean(insurance.cashPremiumsInRetirementSpending)} onClick={() => updateInsurance({ cashPremiumsInRetirementSpending: true })}><strong>Yes, included in my spending</strong></Choice>
+          <Choice selected={!insurance.cashPremiumsInRetirementSpending} onClick={() => updateInsurance({ cashPremiumsInRetirementSpending: false })}><strong>No, add them separately</strong></Choice>
+        </div></fieldset>
+        <dl className="cpf-premium-preview" aria-live="polite"><div><dt>Modelled annual premiums now</dt><dd>{formatCurrency(preview.total)}</dd></div><div><dt>Eligible for MediSave</dt><dd>{formatCurrency(preview.medisaveEligible)}</dd></div><div><dt>Modelled cash above limits</dt><dd>{formatCurrency(preview.cashRequired)}</dd></div></dl>
+        <p className="cpf-question-note">The budget choices cover ordinary cash premiums above withdrawal limits. If MediSave runs out, its unpaid portion is always an extra cash expense. No family support, subsidies, disability claims or premium waivers are assumed. This replaces any old flat MA-premium input.</p>
         <Note title="Estimate assumptions and optional adjustments">
           <p>MediShield Life uses MOH's age-next-birthday premium table effective 1 April 2025, before subsidies, including GST. Future repricing starts at 3% yearly as a planning assumption, not an announced increase.</p>
           <p>For a private IP, your entered premium follows the MediShield age curve as a rough proxy plus the same repricing rate. Riders are excluded. This is not an insurer quote. The additional MediSave limit is $300 up to age-next-birthday 40, $600 from 41 to 70, and $900 from 71.</p>

@@ -66,6 +66,7 @@ export function buildProjectionWorkbook(data: ExportData, created = new Date()) 
     { field: "Value basis", value: "Future (nominal) SGD, regardless of chart display toggle" },
     { field: "Timing", value: "Annual model: monthly contributions are multiplied by 12 and receive a full year's growth. Pre-retirement total return includes reinvested income; retirement capital growth and paid income are separate." },
     { field: "Rate units", value: "Rates are annual percentage points: 5 means 5%, not 500%. Amounts in SGD; fields containing Monthly or Annual specify frequency." },
+    { field: "Insurance cash accounting", value: "Insurance Cash Premium is the modelled cash requirement. Insurance Cash Expense is only the additional deduction after budget inclusion choices, plus any unpaid MediSave portion. Allowance mode excludes unestimated private IP cash premiums; include those in your budget." },
     ...flatEntries(data.inputs ?? data.household!)
   ], "Complete inputs, including inactive settings. Inclusion toggles determine which inputs affect this projection. Mixtures are estimates with stable allocation, not separately simulated holdings.");
   if (data.projection) {

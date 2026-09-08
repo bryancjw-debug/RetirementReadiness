@@ -18,6 +18,7 @@ import { ExcelDownload } from "./components/ExcelDownload";
 import { OnboardingWizard } from "./components/OnboardingWizard";
 import { CouplePlanner } from "./components/CouplePlanner";
 import { CpfExtrasQuiz } from "./components/CpfExtrasQuiz";
+import { CpfPlanningPreview, MedisaveBalanceQuestion } from "./components/CpfPlanningPreview";
 import {
   cpfContributionForYear,
   defaultInputs,
@@ -473,7 +474,7 @@ export default function App() {
         body: `${formatCurrency(paid)} is transferred from cash to SA/RA over the projection. ${unfilled > 0 ? `${formatCurrency(unfilled)} is not credited because of cash availability or estimated top-up limits. ` : ""}These top-ups stay locked for retirement payouts; no tax refunds are assumed.`, tone: unfilled > 0 ? "warn" : "blue" });
     }
     if (inputs.includeCpf && inputs.insuranceEstimate?.enabled) {
-      insights.push({ title: "Insurance cash costs are included", body: "Age-based premiums reduce MediSave within withdrawal limits. The cash remainder is added to spending, including when MediSave runs out. Keep these premiums separate from your lifestyle budget. See Insurance in the year table for the split.", tone: "blue" });
+      insights.push({ title: "Insurance follows your budget choices", body: "MediSave is deducted within withdrawal limits. Ordinary cash premiums are added only when not already budgeted; an unpaid MediSave portion is always extra. Allowance mode does not estimate private IP cash premiums. See Insurance in the year table for the split.", tone: "blue" });
     }
     const earlyGap = projection.rows.find(row => row.phase === "build-up" && row.shortfall > 0);
     if (earlyGap) insights.push({ title: `Funding gap before retirement at age ${earlyGap.age}`, body: "Projected savings cannot cover some housing, insurance or event costs before retirement. Review the annual cash flows as well as the retirement readiness percentage.", tone: "warn" });
@@ -772,7 +773,7 @@ export default function App() {
                 <div className="field-grid">
                   <NumberField label="CPF OA" prefix="$" value={inputs.cpfOa} onChange={(value) => updateInput("cpfOa", value)} />
                   <NumberField label="CPF SA" prefix="$" value={inputs.cpfSa} onChange={(value) => updateInput("cpfSa", value)} />
-                  <NumberField label="CPF MA" prefix="$" value={inputs.cpfMa} onChange={(value) => updateInput("cpfMa", value)} />
+                  <MedisaveBalanceQuestion currentAge={inputs.currentAge} value={inputs.cpfMa} onChange={(value) => updateInput("cpfMa", value)} />
                   <NumberField label="CPF RA" helper="Leave as 0 if you are below 55 and RA has not formed." prefix="$" value={inputs.cpfRa} onChange={(value) => updateInput("cpfRa", value)} />
                 </div>
                 <div className="field-grid">
@@ -844,6 +845,7 @@ export default function App() {
                 ) : (
                   <p className="helper-note">No active-income CPF will be added. Existing CPF balances and CPF LIFE can still be projected below.</p>
                 )}
+                <CpfPlanningPreview housing inputs={inputs} />
                 <CpfExtrasQuiz value={inputs} onChange={(patch) => setInputs((current) => ({ ...current, ...patch }))} />
               </>
             ) : null}

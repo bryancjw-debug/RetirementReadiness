@@ -120,6 +120,7 @@ export interface RetirementYear {
   cpfRetirementTopUpUnfilled: number;
   insurancePremiumTotal: number;
   insuranceCashPremium: number;
+  insuranceCashExpense: number;
   housingCashPayment: number;
   age: number;
   yearIndex: number;
@@ -179,6 +180,9 @@ export interface RetirementYear {
 }
 
 export interface InsuranceEstimate {
+  privatePremiumMode?: "allowance" | "actual";
+  cashPremiumsInSavings?: boolean;
+  cashPremiumsInRetirementSpending?: boolean;
   enabled: boolean;
   hospitalCover: "none" | "medishield" | "integrated";
   privatePremiumAnnual: number;

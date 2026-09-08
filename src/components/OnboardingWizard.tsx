@@ -18,6 +18,7 @@ import type {
 import { formatCurrency } from "../utils/formatters";
 import { selfEmployedMandatoryMedisave } from "../utils/projection";
 import { CpfExtrasQuiz } from "./CpfExtrasQuiz";
+import { CpfPlanningPreview, MedisaveBalanceQuestion } from "./CpfPlanningPreview";
 import {
   createNewOnboardingAnswers,
   guidedLifestyleOptions,
@@ -558,6 +559,7 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
               </div>
             </div>
             {answers.cpfWorkStatus === "Employed" ? <SliderQuestion label="Gross monthly income" helper="Used to estimate employee and employer CPF contributions up to retirement, subject to CPF wage and annual limits." value={answers.grossMonthlyIncome} min={0} max={20_000} step={250} onChange={(value) => update("grossMonthlyIncome", value)} format={(value) => `${formatCurrency(value)}/mo`} quickValues={[3_000, 5_000, 8_000, 12_000]} /> : null}
+            <CpfPlanningPreview inputs={onboardingAnswersToRetirementInputs(answers, initialInputs)} />
             {answers.cpfWorkStatus === "Self-employed" ? <div className="quiz-stack self-employed-cpf-panel">
               <SliderQuestion
                 label="Annual Net Trade Income declared to IRAS"
@@ -602,7 +604,7 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
             {addCpfBalances ? <div className="cpf-balance-grid">
               <SliderQuestion label="CPF OA" helper="Your current Ordinary Account balance." value={answers.cpfOa} min={0} max={500_000} step={5_000} onChange={(value) => update("cpfOa", value)} format={(value) => formatCurrency(value, { compact: value >= 100_000 })} quickValues={[0, 25_000, 50_000, 100_000, 250_000]} />
               {answers.currentAge < 55 ? <SliderQuestion label="CPF SA" helper="Your current Special Account balance. The model forms RA at age 55." value={answers.cpfSa} min={0} max={500_000} step={5_000} onChange={(value) => update("cpfSa", value)} format={(value) => formatCurrency(value, { compact: value >= 100_000 })} quickValues={[0, 25_000, 50_000, 100_000, 250_000]} /> : <SliderQuestion label="CPF RA" helper="At age 55 or above, enter your current Retirement Account balance." value={answers.cpfRa} min={0} max={700_000} step={5_000} onChange={(value) => update("cpfRa", value)} format={(value) => formatCurrency(value, { compact: value >= 100_000 })} quickValues={[0, 50_000, 110_000, 220_000, 440_000]} />}
-              <SliderQuestion label="CPF MA" helper="Shown separately and not treated as general retirement spending money." value={answers.cpfMa} min={0} max={150_000} step={5_000} onChange={(value) => update("cpfMa", value)} format={(value) => formatCurrency(value, { compact: value >= 100_000 })} quickValues={[0, 25_000, 50_000, 79_000]} />
+              <MedisaveBalanceQuestion currentAge={answers.currentAge} value={answers.cpfMa} onChange={(value) => update("cpfMa", value)} />
             </div> : null}
             </> : null}
             {cpfPart === 2 ? <>
@@ -614,6 +616,7 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
                 <SliderQuestion label="OA mortgage deductions end" helper="Use the expected loan payoff age, even if it is after retirement." value={answers.cpfOaHousingEndAge} min={answers.currentAge} max={answers.endAge} step={1} onChange={(value) => update("cpfOaHousingEndAge", value)} format={(value) => `Age ${value}`} quickValues={[55, 60, 65, 70]} />
               </div> : null}
             </div>
+            <CpfPlanningPreview housing inputs={onboardingAnswersToRetirementInputs(answers, initialInputs)} />
             <CpfExtrasQuiz section="insurance" value={answers} onChange={(patch) => setAnswers((current) => ({ ...current, ...patch }))} />
             </> : null}
             {cpfPart === 3 ? <>
@@ -706,7 +709,7 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
               <small>{formatCurrency(answers.monthlyCashContribution)} cash · {formatCurrency(answers.monthlyInvestmentContribution)} invested</small>
             </article>
             <article><span>CPF & CPF LIFE</span><strong>{answers.includeCpf ? "Included" : "Excluded by choice"}</strong><small>{answers.includeCpf ? `${formatCurrency(answers.cpfOa + answers.cpfSa + answers.cpfMa + answers.cpfRa)} current CPF · payout from age ${answers.cpfLifeStartAge}` : "No CPF balances, contributions or payouts counted"}</small></article>
-            {answers.includeCpf ? <article><span>CPF top-ups and premiums</span><strong>{answers.retirementTopUp?.enabled ? `${formatCurrency(answers.retirementTopUp.annualAmount)}/year retirement top-up` : "No retirement-only cash top-ups"}</strong><small>{answers.insuranceEstimate?.enabled ? "Age-based insurance estimate included; cash premiums are additional expenses" : "No new insurance estimate"}</small></article> : null}
+            {answers.includeCpf ? <article><span>CPF top-ups and premiums</span><strong>{answers.retirementTopUp?.enabled ? `${formatCurrency(answers.retirementTopUp.annualAmount)}/year retirement top-up` : "No retirement-only cash top-ups"}</strong><small>{answers.insuranceEstimate?.enabled ? "Insurance included according to your cash-budget choices" : "No new insurance estimate"}</small></article> : null}
             <article><span>Events and other income</span><strong>{answers.includeOneTimeEvents ? "1 event included" : "No event"} · {answers.includeOtherIncome ? "1 income included" : "No extra income"}</strong><small>{answers.oneTimeEvents[0]?.certainty === "possible" ? "Possible event is included—compare without it later" : "Only selected items affect the projection"}</small></article>
             <article><span>Retirement investment income</span><strong>{answers.retirementIncomePreference === "income" ? "Dividend income first" : "Capital growth and drawdown"}</strong><small>{answers.retirementIncomePreference === "income" ? `${answers.passiveIncomeYieldRate.toFixed(2)}% dividend or distribution yield` : "No separate dividend income assumed"}</small></article>
             <article><span>Planning assumptions</span><strong>{answers.retirementSpendingInflationRate}% inflation · {answers.preRetirementInvestmentReturnRate}% investment return</strong><small>{answers.refineAssumptions ? "Refined during the quiz" : "Starting assumptions retained"}</small></article>
