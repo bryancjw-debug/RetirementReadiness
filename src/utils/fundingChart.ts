@@ -3,6 +3,11 @@ import type { RetirementYear } from "../types";
 export type FundingValueMode = "future" | "today";
 
 export interface RetirementFundingRow {
+  taxableIncome: number;
+  srsGross: number;
+  srsTax: number;
+  srsNet: number;
+  totalIncomeTax: number;
   age: number;
   spending: number;
   recurringSpending: number;
@@ -33,6 +38,8 @@ export function buildRetirementFundingRows(rows: RetirementYear[]): RetirementFu
     remaining -= dividends;
     const customIncome = allocate(row.customIncomeGenerated, remaining);
     remaining -= customIncome;
+    const taxableIncome = allocate((row.otherTaxableIncome ?? 0) - (row.otherIncomeTax ?? 0), remaining);
+    remaining -= taxableIncome;
     const srs = allocate(row.srsNetWithdrawal, remaining);
     remaining -= srs;
     const cash = allocate(row.cashWithdrawal, remaining);
@@ -42,9 +49,14 @@ export function buildRetirementFundingRows(rows: RetirementYear[]): RetirementFu
     const cpf = allocate(row.cpfDrawdown, remaining);
     remaining -= cpf;
     const shortfall = Math.max(remaining, 0);
-    const totalIncome = row.cpfLifeIncome + row.passiveIncomeGenerated + row.customIncomeGenerated + row.srsNetWithdrawal;
+    const totalIncome = row.cpfLifeIncome + row.passiveIncomeGenerated + row.customIncomeGenerated + row.srsNetWithdrawal + (row.otherTaxableIncome ?? 0) - (row.otherIncomeTax ?? 0);
 
     return {
+      taxableIncome,
+      srsGross: row.srsWithdrawal ?? 0,
+      srsTax: row.srsEstimatedTax ?? 0,
+      srsNet: row.srsNetWithdrawal,
+      totalIncomeTax: row.totalIncomeTax ?? row.srsEstimatedTax ?? 0,
       age: row.age,
       spending,
       recurringSpending: row.spendingNeed,

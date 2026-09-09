@@ -19,6 +19,8 @@ export type ContributionCadence = "monthly" | "occasional";
 export type RetirementIncomePreference = "income" | "growth";
 
 export interface OnboardingAnswers {
+  spendingProfile?: RetirementInputs["spendingProfile"];
+  srsPlanning?: Partial<RetirementInputs>;
   investmentMix?: RetirementInputs["investmentMix"];
   retirementInvestmentMix?: RetirementInputs["retirementInvestmentMix"];
   unknownBalances?: string[];
@@ -99,6 +101,8 @@ export const guidedLifestyleOptions: Array<{
 
 export function createInitialOnboardingAnswers(inputs: RetirementInputs): OnboardingAnswers {
   return {
+    spendingProfile: inputs.spendingProfile,
+    srsPlanning: Object.fromEntries(Object.entries(inputs).filter(([key]) => key.startsWith("srs") || key === "includeSrs" || key === "otherTaxableIncome" || key === "retirementTaxResidency")),
     investmentMix: inputs.investmentMix,
     retirementInvestmentMix: inputs.retirementInvestmentMix,
     retirementTopUp: inputs.retirementTopUp ? { ...inputs.retirementTopUp } : undefined,
@@ -171,6 +175,8 @@ export function onboardingAnswersToRetirementInputs(
 
   return {
     ...existingDefaults,
+    ...answers.srsPlanning,
+    spendingProfile: answers.spendingProfile,
     investmentMix: answers.investmentMix,
     retirementInvestmentMix: answers.retirementInvestmentMix,
     retirementTopUp: answers.retirementTopUp,
@@ -218,7 +224,7 @@ export function onboardingAnswersToRetirementInputs(
     cpfRetirementSum: answers.cpfRetirementSum,
     cpfLifePlan: answers.cpfLifePlan,
     cpfLifeMonthlyOverride: answers.includeCpf ? answers.cpfLifeMonthlyOverride : 0,
-    includeSrs: false,
+    includeSrs: answers.srsPlanning?.includeSrs ?? existingDefaults.includeSrs,
     includeOneTimeEvents: answers.includeOneTimeEvents,
     oneTimeEvents: answers.includeOneTimeEvents ? answers.oneTimeEvents.map((event) => ({ ...event })) : []
   };

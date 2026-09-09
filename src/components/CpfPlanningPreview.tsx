@@ -3,6 +3,7 @@ import type { RetirementInputs } from "../types";
 import { activeIncomeAnnual, applicableBhs, cpfContributionForYear } from "../utils/projection";
 import { formatCurrency } from "../utils/formatters";
 import { QuizNumberQuestion } from "./QuizNumberQuestion";
+import { srsContributionForAge } from "../utils/srsPlanning";
 
 export function MedisaveBalanceQuestion({ currentAge, value, onChange }: {
   currentAge: number; value: number; onChange: (value: number) => void;
@@ -24,7 +25,7 @@ export function CpfPlanningPreview({ inputs, housing = false }: { inputs: Retire
   const cpf = cpfContributionForYear(inputs, inputs.currentAge);
   const income = activeIncomeAnnual(inputs, inputs.currentAge) / 12;
   const takeHome = Math.max(0, income - cpf.employee / 12);
-  const saving = inputs.cashSavingsContribution + inputs.investmentContribution;
+  const saving = inputs.cashSavingsContribution + inputs.investmentContribution + srsContributionForAge(inputs, inputs.currentAge) / 12;
   const exceedsIncome = inputs.currentAge < inputs.retirementAge && inputs.cpfWorkStatus !== "Not contributing" && saving > takeHome;
   const oaGap = Math.max(0, inputs.cpfOaHousingMonthly - cpf.oa / 12);
   const allocations = [["OA", cpf.oa], [inputs.currentAge < 55 ? "SA" : "RA", cpf.sa + cpf.ra], ["MA", cpf.ma]] as const;

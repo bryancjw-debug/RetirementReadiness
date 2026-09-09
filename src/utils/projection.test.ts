@@ -328,10 +328,10 @@ describe("projectRetirement", () => {
       includeCpf: false,
       includeSrs: true,
       srsResidency: "Singapore Citizen Or Permanent Resident",
-      srsCurrentBalance: 500_000,
-      srsReturnRate: 0,
+      srsCurrentBalance: 400_000,
+      srsReturnRate: 25,
       srsFirstWithdrawalAge: 65,
-      srsWithdrawalStrategy: "Tax Aware"
+      srsWithdrawalStrategy: "Even Over Ten Years"
     });
 
     const firstWithdrawal = projection.rows[0];

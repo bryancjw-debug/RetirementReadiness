@@ -19,6 +19,11 @@ export function removeQuizDraft(storage: Pick<Storage, "removeItem">, key: strin
 }
 
 const optionalShapes: Record<string, unknown> = {
+  spendingProfile: { adults: 1, dependants: [{ id: "", label: "", currentAge: 0, supportUntilAge: 0, monthlyAmountToday: 0 }] },
+  otherTaxableIncome: { annualAmount: 0, startAge: 0, endAge: 0, growthRate: 0 },
+  srsContributionStartAge: 0,
+  srsAssetCategory: "",
+  retirementTaxResidency: "",
   investmentMix: [{ label: "", amount: 0, returnRate: 0, incomeYield: 0 }],
   retirementInvestmentMix: [{ label: "", amount: 0, returnRate: 0, incomeYield: 0 }],
   retirementTopUp: { enabled: false, annualAmount: 0, startAge: 30, endAge: 65 },
@@ -35,7 +40,17 @@ export function matchesQuizShape(value: unknown, template: unknown): boolean {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   return Object.entries(template).every(([key, item]) => {
     const next = (value as Record<string, unknown>)[key];
-    if (optionalShapes[key] && next !== undefined && next !== null) return matchesQuizShape(next, optionalShapes[key]);
+    if (["spendingProfile", "srsPlanning", "otherTaxableIncome", "srsContributionStartAge", "srsAssetCategory", "retirementTaxResidency"].includes(key) && next === undefined) return true;
+    if (key === "srsPlanning" && next !== undefined) {
+      if (!next || typeof next !== "object" || Array.isArray(next)) return false;
+      return Object.entries(next).every(([field, value]) => {
+        if (field === "otherTaxableIncome") return value === undefined || matchesQuizShape(value, optionalShapes.otherTaxableIncome);
+        if (field === "includeSrs") return typeof value === "boolean";
+        if (["srsResidency", "srsFirstContributionPeriod", "srsWithdrawalStrategy", "srsAssetCategory", "retirementTaxResidency"].includes(field)) return typeof value === "string";
+        return ["srsCurrentBalance", "srsAnnualContribution", "srsContributionStartAge", "srsContributionEndAge", "srsReturnRate", "srsFirstWithdrawalAge"].includes(field) && matchesQuizShape(value, 0);
+      });
+    }
+    if (key in optionalShapes && next !== undefined && next !== null) return matchesQuizShape(next, optionalShapes[key]);
     return matchesQuizShape(next, item);
   });
 }

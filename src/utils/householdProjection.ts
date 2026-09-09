@@ -17,6 +17,8 @@ import {
   srsContributionCap
 } from "./projection";
 import { insuranceForYear, additionalInsuranceCashExpense } from "./insurance";
+import { retirementTaxForYear, srsContributionForAge, srsWithdrawalForAge } from "./srsPlanning";
+import { dependantSpendingForYear } from "./lifestyle";
 
 type PersonState = {
   cpf: CpfState;
@@ -25,6 +27,9 @@ type PersonState = {
 };
 
 export interface HouseholdPersonYear {
+  otherTaxableIncome: number;
+  otherIncomeTax: number;
+  totalIncomeTax: number;
   cpfRetirementTopUp: number;
   cpfRetirementTopUpUnfilled: number;
   cpfMaMedicalPremium: number;
@@ -57,6 +62,10 @@ export interface HouseholdPersonYear {
 }
 
 export interface HouseholdYear {
+  otherTaxableIncome: number;
+  otherIncomeTax: number;
+  totalIncomeTax: number;
+  dependantSpending: number;
   yearIndex: number;
   calendarYear: number;
   phase: "build-up" | "retirement";
@@ -133,35 +142,27 @@ function createPersonState(person: HouseholdPersonPlan): PersonState {
 }
 
 function srsForYear(inputs: RetirementInputs, state: PersonState, age: number) {
-  const contribution = inputs.includeSrs
-    && age < inputs.retirementAge
-    && age <= inputs.srsContributionEndAge
-    && age < inputs.srsFirstWithdrawalAge
-    ? Math.min(inputs.srsAnnualContribution, srsContributionCap(inputs))
-    : 0;
+  const contribution = srsContributionForAge(inputs, age);
   state.srsBalance += contribution;
   const growth = state.srsBalance * rate(inputs.srsReturnRate);
   state.srsBalance += growth;
   let withdrawal = 0;
   if (inputs.includeSrs && age >= inputs.srsFirstWithdrawalAge && age < inputs.srsFirstWithdrawalAge + 10) {
     if (state.srsWithdrawalBase <= 0) state.srsWithdrawalBase = state.srsBalance;
-    const withdrawalYear = age - inputs.srsFirstWithdrawalAge + 1;
-    const yearsRemaining = 11 - withdrawalYear;
-    withdrawal = withdrawalYear === 10
-      ? state.srsBalance
-      : inputs.srsWithdrawalStrategy === "Tax Aware"
-        ? Math.min(state.srsBalance, state.srsBalance / yearsRemaining)
-        : Math.min(state.srsBalance, state.srsWithdrawalBase / 10);
+    withdrawal = srsWithdrawalForAge(inputs, age, state.srsBalance, state.srsWithdrawalBase);
     state.srsBalance -= withdrawal;
   }
-  const tax = estimateSrsWithdrawalTax(withdrawal, inputs.srsResidency);
+  const tax = retirementTaxForYear(inputs, age, withdrawal);
   return {
     contribution,
     growth,
     withdrawal,
-    taxableAmount: tax.taxableAmount,
-    estimatedTax: tax.estimatedTax,
-    netWithdrawal: Math.max(0, withdrawal - tax.estimatedTax)
+    taxableAmount: withdrawal / 2,
+    estimatedTax: tax.srsTax,
+    otherTaxableIncome: tax.otherIncome,
+    otherIncomeTax: tax.otherTax,
+    totalIncomeTax: tax.totalTax,
+    netWithdrawal: Math.max(0, withdrawal - tax.srsTax)
   };
 }
 
@@ -301,6 +302,9 @@ export function projectHousehold(rawPlan: HouseholdPlan): HouseholdProjection {
         customIncome,
         cpfDrawdown: 0,
         srsContribution: srs.contribution,
+        otherTaxableIncome: srs.otherTaxableIncome,
+        otherIncomeTax: srs.otherIncomeTax,
+        totalIncomeTax: srs.totalIncomeTax,
         srsGrowth: srs.growth,
         srsWithdrawal: srs.withdrawal,
         srsTaxableAmount: srs.taxableAmount,
@@ -330,8 +334,9 @@ export function projectHousehold(rawPlan: HouseholdPlan): HouseholdProjection {
     const passiveIncome = phase === "retirement" ? investmentsBeforeGrowth * rate(plan.passiveIncomeYieldRate) : 0;
     const householdSpending = (phase === "retirement"
       ? nonNegative(plan.retirementSpendingAnnual) * Math.pow(1 + rate(plan.retirementSpendingInflationRate), yearIndex)
-      : 0) + extraCashCosts;
-    const nonSrsIncome = passiveIncome + totalCpfLifeIncome + totalCustomIncome;
+      + dependantSpendingForYear(plan.spendingProfile, yearIndex, plan.retirementSpendingInflationRate) : 0) + extraCashCosts;
+    const otherNetIncome = personRows.reduce((sum,p) => sum+p.otherTaxableIncome-p.otherIncomeTax,0);
+    const nonSrsIncome = passiveIncome + totalCpfLifeIncome + totalCustomIncome + otherNetIncome;
     const srsIncomeUsed = Math.min(totalSrsNetWithdrawal, Math.max(0, householdSpending + eventTotals.outflow - nonSrsIncome));
     const srsToCash = totalSrsNetWithdrawal - srsIncomeUsed;
     const cashBeforeInterest = cash + cashContribution + srsToCash + eventTotals.inflow - topupBudget;
@@ -380,6 +385,10 @@ export function projectHousehold(rawPlan: HouseholdPlan): HouseholdProjection {
     const totalSrs = states.reduce((sum, state) => sum + state.srsBalance, 0);
     const totalLifeReserve = states.reduce((sum, state) => sum + state.cpf.lifeReserve, 0);
     rows.push({
+      otherTaxableIncome: personRows.reduce((sum,p) => sum+p.otherTaxableIncome,0),
+      otherIncomeTax: personRows.reduce((sum,p) => sum+p.otherIncomeTax,0),
+      totalIncomeTax: personRows.reduce((sum,p) => sum+p.totalIncomeTax,0),
+      dependantSpending: phase === "retirement" ? dependantSpendingForYear(plan.spendingProfile, yearIndex, plan.retirementSpendingInflationRate) : 0,
       yearIndex,
       calendarYear,
       phase,

@@ -14,6 +14,7 @@ import {
 import { BadgeCheck, Calculator, Check, CircleAlert, CircleHelp, Moon, Pencil, Plus, RotateCcw, ShieldCheck, Sparkles, Sun, Trash2 } from "lucide-react";
 import { YearTable as ResponsiveYearTable } from "./components/YearTable";
 import { RateAssumptions } from "./components/RateAssumptions";
+import { SrsPlanner } from "./components/SrsPlanner";
 import { ExcelDownload } from "./components/ExcelDownload";
 import { OnboardingWizard } from "./components/OnboardingWizard";
 import { CouplePlanner } from "./components/CouplePlanner";
@@ -407,7 +408,7 @@ export default function App() {
     customIncome: Math.round(row.customIncomeGenerated),
     srsIncome: Math.round(row.srsNetWithdrawal),
     healthcareCost: Math.round(row.healthcareCost),
-    income: Math.round(row.passiveIncomeGenerated + row.cpfLifeIncome + row.customIncomeGenerated + row.srsNetWithdrawal),
+    income: Math.round(row.passiveIncomeGenerated + row.cpfLifeIncome + row.customIncomeGenerated + row.srsNetWithdrawal + row.otherTaxableIncome - row.otherIncomeTax),
     spending: Math.round(row.spendingNeed),
     cashWithdrawal: Math.round(row.cashWithdrawal),
     investmentWithdrawal: Math.round(row.investmentWithdrawal),
@@ -992,73 +993,7 @@ export default function App() {
                 </div>
               ) : null}
 
-              <ToggleRow
-                title="Enable SRS Planning"
-                description="Optional Singapore Supplementary Retirement Scheme projection. Contributions receive tax relief subject to the overall personal relief cap; withdrawals are modelled over ten years with 50% taxable for qualifying retirement withdrawals."
-                checked={inputs.includeSrs}
-                onChange={(checked) => updateInput("includeSrs", checked)}
-              />
-              {inputs.includeSrs ? (
-                <div className="custom-income-panel">
-                  <div className="custom-income-panel__header">
-                    <div>
-                      <div className="heading-with-tip">
-                        <h3>SRS Planning</h3>
-                        <InfoTip text="Your penalty-free withdrawal age is the statutory retirement age in force when you first contributed: 62 before 1 July 2022, 63 from 1 July 2022 to 30 June 2026, and 64 from 1 July 2026. If unsure, check with your SRS operator." />
-                      </div>
-                      <p>Annual contributions, tax-aware withdrawals, estimated tax, and the final deemed withdrawal are shown separately.</p>
-                    </div>
-                  </div>
-                  <div className="field-grid">
-                    <SelectField<SrsResidencyStatus>
-                      label="SRS Residency Status"
-                      helper={`Annual contribution cap: ${formatCurrency(srsContributionCap(inputs))}.`}
-                      value={inputs.srsResidency}
-                      options={["Singapore Citizen Or Permanent Resident", "Foreigner"]}
-                      labels={{
-                        "Singapore Citizen Or Permanent Resident": "Singapore Citizen / PR",
-                        Foreigner: "Foreigner"
-                      }}
-                      onChange={(value) => updateInput("srsResidency", value)}
-                    />
-                    <SelectField<SrsFirstContributionPeriod>
-                      label="When Was Your First SRS Contribution?"
-                      helper={`Sets the earliest penalty-free withdrawal age to ${srsPrescribedRetirementAge(inputs)}.`}
-                      value={inputs.srsFirstContributionPeriod}
-                      options={["Not Sure", "Before 1 July 2022", "1 July 2022 To 30 June 2026", "From 1 July 2026"]}
-                      labels={{
-                        "Not Sure": "Not sure - use age 64",
-                        "Before 1 July 2022": "Before 1 Jul 2022 - age 62",
-                        "1 July 2022 To 30 June 2026": "1 Jul 2022 to 30 Jun 2026 - age 63",
-                        "From 1 July 2026": "From 1 Jul 2026 - age 64"
-                      }}
-                      onChange={updateSrsFirstContributionPeriod}
-                    />
-                    <NumberField label="Current SRS Balance" prefix="$" value={inputs.srsCurrentBalance} onChange={(value) => updateInput("srsCurrentBalance", value)} />
-                    <NumberField label="Annual SRS Contribution" helper={`Contributions stop at retirement or the contribution end age and are capped at ${formatCurrency(srsContributionCap(inputs))}.`} prefix="$" value={inputs.srsAnnualContribution} onChange={(value) => updateInput("srsAnnualContribution", value)} />
-                    <NumberField label="Contribution End Age" value={inputs.srsContributionEndAge} onChange={(value) => updateInput("srsContributionEndAge", value)} />
-                    <NumberField label="SRS Return Rate" suffix="%" step={0.1} value={inputs.srsReturnRate} onChange={(value) => updateInput("srsReturnRate", value)} />
-                    <NumberField label="First Penalty-Free Withdrawal Age" helper={`Cannot be earlier than age ${srsPrescribedRetirementAge(inputs)} for the selected first-contribution period.`} min={srsPrescribedRetirementAge(inputs)} value={inputs.srsFirstWithdrawalAge} onChange={(value) => updateInput("srsFirstWithdrawalAge", value)} />
-                    <SelectField<SrsWithdrawalStrategy>
-                      label="Withdrawal Strategy"
-                      helper="Tax Aware spreads the projected balance across the remaining years. Even uses the starting balance as a fixed ten-year base, with any residual deemed withdrawn in year ten."
-                      value={inputs.srsWithdrawalStrategy}
-                      options={["Tax Aware", "Even Over Ten Years"]}
-                      onChange={(value) => updateInput("srsWithdrawalStrategy", value)}
-                    />
-                  </div>
-                  <div className="mini-metrics">
-                    <MetricCard label="Projected SRS Contributions" value={formatCurrency(projection.summary.totalSrsContributions)} note="Across the build-up years" tone="blue" />
-                    <MetricCard label="Gross SRS Withdrawals" value={formatCurrency(projection.summary.totalSrsWithdrawals)} note="Includes the final deemed withdrawal" tone="good" />
-                    <MetricCard label="Estimated SRS Tax" value={formatCurrency(projection.summary.totalSrsEstimatedTax)} note="Assumes no other taxable income" tone={projection.summary.totalSrsEstimatedTax > 0 ? "warn" : "neutral"} />
-                    <MetricCard label="Net SRS Withdrawals" value={formatCurrency(projection.summary.totalSrsNetWithdrawals)} note="Available for spending or cash" tone="blue" />
-                    <MetricCard label="SRS Balance At End" value={formatCurrency(projection.rows.at(-1)?.srsBalance ?? 0)} note="Zero after the ten-year window, except life annuities" tone="neutral" />
-                  </div>
-                  <p className="source-note">
-                    Qualifying withdrawals are modelled with 50% taxable. For Singapore citizens and PRs, resident rates are applied assuming no other taxable income, so up to SGD 40,000 gross a year generally produces no tax. For foreigners, the app shows estimated 24% withholding on the taxable half; final tax may differ. The life-annuity exception is not modelled.
-                  </p>
-                </div>
-              ) : null}
+              <SrsPlanner inputs={inputs} onChange={patch => setInputs(current => ({ ...current, ...patch }))} />
             </div>
             <details className="assumption-details">
               <summary>Fine tune retirement income assumptions</summary>
@@ -1256,7 +1191,8 @@ export default function App() {
                 { label: "CPF LIFE", className: "dot-primary" },
                 { label: "Dividends", className: "dot-success" },
                 { label: "Custom Income", className: "dot-custom-income" },
-                { label: "SRS Withdrawal", className: "dot-srs" },
+                { label: "SRS After Tax", className: "dot-srs" },
+                { label: "Other Income After Tax", className: "dot-warning" },
                 { label: "Cash Drawdown", className: "dot-cash" },
                 { label: "Investment Drawdown", className: "dot-investments" },
                 { label: "CPF Drawdown", className: "dot-cpf-oa" },
@@ -1282,7 +1218,8 @@ export default function App() {
                     <Bar dataKey="cpfLife" name="CPF LIFE Income" stackId="funding" fill="var(--chart-primary)" />
                     <Bar dataKey="dividends" name="Dividends / Passive Income" stackId="funding" fill="var(--chart-success)" />
                     <Bar dataKey="customIncome" name="Custom Income" stackId="funding" fill="var(--chart-custom-income)" />
-                    <Bar dataKey="srs" name="SRS Withdrawal" stackId="funding" fill="var(--chart-srs)" />
+                    <Bar dataKey="taxableIncome" name="Other Income After Tax" stackId="funding" fill="var(--chart-warning)" />
+                    <Bar dataKey="srs" name="SRS After Tax Used For Spending" stackId="funding" fill="var(--chart-srs)" />
                     <Bar dataKey="cash" name="Cash Drawdown" stackId="funding" fill="var(--chart-cash)" />
                     <Bar dataKey="investments" name="Investment Drawdown" stackId="funding" fill="var(--chart-investments)" />
                     <Bar dataKey="cpf" name="CPF OA/SA Drawdown" stackId="funding" fill="var(--chart-cpf-oa)" />
@@ -1313,6 +1250,7 @@ export default function App() {
                     { label: "Dividends", value: selectedFundingRow.dividends, className: "funding-dividends" },
                     { label: "Custom income", value: selectedFundingRow.customIncome, className: "funding-custom" },
                     { label: "SRS", value: selectedFundingRow.srs, className: "funding-srs" },
+                    { label: "Other income after tax", value: selectedFundingRow.taxableIncome, className: "funding-other" },
                     { label: "Cash used", value: selectedFundingRow.cash, className: "funding-cash" },
                     { label: "Investments sold", value: selectedFundingRow.investments, className: "funding-investments" },
                     { label: "CPF OA/SA used", value: selectedFundingRow.cpf, className: "funding-cpf" },
@@ -1326,6 +1264,8 @@ export default function App() {
                   ))}
                 </div>
                 <p className="selected-funding__note">
+                  {selectedFundingRow.srsGross > 0 ? `SRS withdrawn: ${formatCurrency(selectedFundingRow.srsGross)} gross, less ${formatCurrency(selectedFundingRow.srsTax)} incremental tax = ${formatCurrency(selectedFundingRow.srsNet)} net. ` : ""}
+                  {selectedFundingRow.totalIncomeTax > 0 ? `Total estimated income tax reserved this year: ${formatCurrency(selectedFundingRow.totalIncomeTax)}. ` : ""}
                   {selectedFundingRow.oneTimeOutflow > 0 ? `Includes ${formatCurrency(selectedFundingRow.oneTimeOutflow)} of one-time outflows. ` : ""}
                   {selectedFundingRow.surplusIncome > 0 ? `${formatCurrency(selectedFundingRow.surplusIncome)} of income above this year's need is retained in cash.` : selectedFundingRow.shortfall > 0 ? `${formatCurrency(selectedFundingRow.shortfall)} remains unfunded after all available sources are used.` : "The full spending need is funded in this year."}
                 </p>
@@ -1392,6 +1332,8 @@ export default function App() {
         <section className="scenario-details-card" aria-labelledby="individual-scenario-details-title">
           <div><p className="eyebrow">Additional assumptions</p><h2 id="individual-scenario-details-title">What else this result is counting</h2><p>Each item below maps directly to the year-by-year projection. Switch uncertain assumptions off and compare the result before relying on them.</p></div>
           <div className="scenario-detail-grid">
+            {inputs.includeSrs ? <article><span>SRS</span><strong>{formatCurrency(inputs.srsAnnualContribution)}/year</strong><small>{inputs.srsReturnRate}% assumed return. {inputs.srsWithdrawalStrategy === "Tax Aware" ? "Smooth taxable income" : "Fixed initial tenth"} from age {inputs.srsFirstWithdrawalAge}.</small></article> : null}
+            {(inputs.otherTaxableIncome?.annualAmount ?? 0) > 0 ? <article><span>Taxable retirement income</span><strong>{formatCurrency(inputs.otherTaxableIncome!.annualAmount)}/year today</strong><small>Income tax is reserved before funding spending.</small></article> : null}
             <article><span>One-time event</span><strong>{inputs.includeOneTimeEvents ? inputs.oneTimeEvents[0]?.label ?? "Included" : "Not included"}</strong><small>{inputs.includeOneTimeEvents && inputs.oneTimeEvents[0] ? `${formatCurrency(inputs.oneTimeEvents[0].amount)} ${inputs.oneTimeEvents[0].direction} at age ${inputs.oneTimeEvents[0].age}${inputs.oneTimeEvents[0].certainty === "possible" ? " · Possible" : ""}` : "No event changes this result"}</small></article>
             <article><span>Other retirement income</span><strong>{inputs.customIncomeStreams[0]?.label ?? "Not included"}</strong><small>{inputs.customIncomeStreams[0] ? `${formatCurrency(inputs.customIncomeStreams[0].amount)}/${inputs.customIncomeStreams[0].frequency === "monthly" ? "month" : "year"} from age ${inputs.customIncomeStreams[0].startAge} to ${inputs.customIncomeStreams[0].endAge}` : "CPF LIFE, SRS and portfolio income remain separately displayed"}</small></article>
             <article><span>Core assumptions</span><strong>{formatPercent(inputs.retirementSpendingInflationRate)} inflation · {formatPercent(inputs.preRetirementInvestmentReturnRate)} investment return</strong><small>Projection ends at age {inputs.endAge}; retirement investment return is {formatPercent(inputs.retirementReturnRate)}</small></article>

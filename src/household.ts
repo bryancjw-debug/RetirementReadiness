@@ -12,6 +12,7 @@ export interface HouseholdPersonPlan {
 }
 
 export interface HouseholdPlan {
+  spendingProfile?: RetirementInputs["spendingProfile"];
   investmentMix?: RetirementInputs["investmentMix"];
   retirementInvestmentMix?: RetirementInputs["retirementInvestmentMix"];
   mode: "couple";

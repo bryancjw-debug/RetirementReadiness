@@ -1,5 +1,8 @@
 import { QuizDraftControls } from "./QuizDraftControls";
 import { RateAssumptions } from "./RateAssumptions";
+import { SrsPlanner } from "./SrsPlanner";
+import { useQuizTransition } from "./useQuizTransition";
+import { dependantSpendingForYear } from "../utils/lifestyle";
 import { matchesQuizShape } from "../utils/quizDraft";
 import { QuizNumberQuestion as SliderQuestion } from "./QuizNumberQuestion";
 import { QuizProgress } from "./QuizProgress";
@@ -18,6 +21,7 @@ import type {
 import { formatCurrency } from "../utils/formatters";
 import { selfEmployedMandatoryMedisave } from "../utils/projection";
 import { CpfExtrasQuiz } from "./CpfExtrasQuiz";
+import { LifestylePlanner } from "./LifestylePlanner";
 import { CpfPlanningPreview, MedisaveBalanceQuestion } from "./CpfPlanningPreview";
 import {
   createNewOnboardingAnswers,
@@ -157,6 +161,7 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
   const [resourceStatus, setResourceStatus] = useState<{ cash: ResourceChoice | ""; investments: ResourceChoice | "" }>({ cash: "", investments: "" });
   const cpfParts = ["Work & contributions", "Current balances", "Housing & premiums", "Top-ups & CPF LIFE"];
   const chapter = step <= 2 ? 0 : step <= 4 ? 1 : step === 5 ? 2 : step <= 7 ? 3 : 4;
+  useQuizTransition(step * 10 + cpfPart, started);
   useEffect(() => { onActiveChange?.(started); }, [started, onActiveChange]);
   useEffect(() => {
     if (!started) return;
@@ -171,8 +176,8 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
 
   const yearsUntilRetirement = Math.max(0, answers.retirementAge - answers.currentAge);
   const projectedMonthlySpending = useMemo(
-    () => answers.monthlySpendingToday * Math.pow(1 + answers.retirementSpendingInflationRate / 100, yearsUntilRetirement),
-    [answers.monthlySpendingToday, answers.retirementSpendingInflationRate, yearsUntilRetirement]
+    () => answers.monthlySpendingToday * Math.pow(1 + answers.retirementSpendingInflationRate / 100, yearsUntilRetirement) + dependantSpendingForYear(answers.spendingProfile, yearsUntilRetirement, answers.retirementSpendingInflationRate) / 12,
+    [answers.monthlySpendingToday, answers.spendingProfile, answers.retirementSpendingInflationRate, yearsUntilRetirement]
   );
   const mandatoryMedisavePreview = useMemo(
     () => selfEmployedMandatoryMedisave(answers.currentAge, answers.selfEmployedNetTradeIncomeAnnual),
@@ -379,29 +384,10 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
             <ChoiceCard title="Not yet—help me form one" description="Use an illustrative lifestyle starting point, then adjust it." selected={answers.spendingPath === "guided"} onClick={() => update("spendingPath", "guided")} />
           </div>
 
-          {answers.spendingPath ? (
-            <div className="quiz-subsection">
-              <span className="quiz-subsection__label">Is this spending for one person or a household?</span>
-              <div className="segmented-choice">
-                <button type="button" className={answers.spendingBasis === "individual" ? "is-selected" : ""} onClick={() => update("spendingBasis", "individual")}>One person</button>
-                <button type="button" className={answers.spendingBasis === "household" ? "is-selected" : ""} onClick={() => update("spendingBasis", "household")}>Household</button>
-              </div>
-            </div>
-          ) : null}
-
-          {answers.spendingPath === "guided" ? (
-            <div className="quiz-choice-grid quiz-choice-grid--three quiz-subsection">
-              {guidedLifestyleOptions.map((option) => (
-                <ChoiceCard
-                  key={option.id}
-                  title={`${option.label} · ${formatCurrency(option.monthlyAmount)}/month`}
-                  description={option.note}
-                  selected={answers.guidedLifestyle === option.id}
-                  onClick={() => chooseGuidedLifestyle(option.id, option.monthlyAmount)}
-                />
-              ))}
-            </div>
-          ) : null}
+          {answers.spendingPath ? <LifestylePlanner profile={answers.spendingProfile} currentAge={answers.currentAge} retirementAge={answers.retirementAge}
+            monthlyBase={answers.monthlySpendingToday} showPresets={answers.spendingPath === "guided"}
+            onChange={profile => setAnswers(current => ({ ...current, spendingProfile: profile, spendingBasis: profile.adults === 1 && !profile.dependants.length ? "individual" : "household" }))}
+            onPreset={amount => chooseGuidedLifestyle(amount === 2500 || amount === 4000 ? "Essential" : amount === 3500 || amount === 6000 ? "Comfortable" : "More flexibility", amount)} /> : null}
 
           {answers.spendingPath ? (
             <div className="quiz-subsection">
@@ -529,6 +515,7 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
           {answers.contributionApproach === "none" ? (
             <div className="education-callout"><CircleHelp size={19} /><p>Your initial result will show what the resources already entered may support without assuming additional contributions.</p></div>
           ) : null}
+          <SrsPlanner inputs={onboardingAnswersToRetirementInputs(answers, initialInputs)} onChange={patch => setAnswers(current => ({ ...current, srsPlanning: { ...current.srsPlanning, ...patch } }))} />
           <RateAssumptions value={answers} incomeActive={answers.retirementIncomePreference === "income"} monthlyContribution={answers.monthlyInvestmentContribution} onChange={updateRates} />
         </QuestionStep>
       ) : null}
@@ -655,6 +642,7 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
 
           <div className="quiz-subsection optional-question-block">
             <span className="quiz-subsection__label">Include another recurring retirement income?</span>
+            <p className="cpf-question-note">Use income after any tax here. For taxable rental income, use the retirement-tax questions under Building Towards Tomorrow. Do not enter the same income in both places.</p>
             <div className="segmented-choice"><button type="button" className={answers.includeOtherIncome ? "is-selected" : ""} onClick={() => { update("includeOtherIncome", true); if (!answers.customIncomeStreams.length) chooseIncome("Policy or annuity payout"); }}>Yes</button><button type="button" className={!answers.includeOtherIncome ? "is-selected" : ""} onClick={() => update("includeOtherIncome", false)}>Not now</button></div>
             {answers.includeOtherIncome ? <div className="quiz-stack quiz-subsection">
               <div className="quiz-choice-grid quiz-choice-grid--two">
@@ -688,6 +676,8 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
           <div className="review-edit-links" aria-label="Edit your answers">{stepLabels.slice(0, 8).map((label, index) => <button type="button" className="secondary-action" key={label} onClick={() => jumpTo(index)}>Edit {label}</button>)}</div>
           {(resourceStatus.cash === "unknown" || resourceStatus.investments === "unknown") ? <p className="education-callout">Some balances are unknown and excluded. Your result will be an incomplete estimate.</p> : null}
           <div className="review-grid">
+            {answers.srsPlanning?.includeSrs ? <article><span>SRS contribution</span><strong>{formatCurrency(Math.min(answers.srsPlanning.srsResidency === "Foreigner" ? 35700 : 15300, answers.srsPlanning.srsAnnualContribution ?? 0))}/year</strong><small>Separate from cash and ordinary investments. Withdrawals from age {answers.srsPlanning.srsFirstWithdrawalAge}.</small></article> : null}
+            {(answers.srsPlanning?.otherTaxableIncome?.annualAmount ?? 0) > 0 ? <article><span>Other taxable retirement income</span><strong>{formatCurrency(answers.srsPlanning!.otherTaxableIncome!.annualAmount)}/year today</strong><small>Net of estimated tax in retirement funding. Entered separately from recurring income.</small></article> : null}
             <article>
               <span>Timeline</span>
               <strong>Age {answers.currentAge} → {answers.retirementAge}</strong>

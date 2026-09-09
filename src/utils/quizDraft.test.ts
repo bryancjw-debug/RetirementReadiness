@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 import { matchesQuizShape, readQuizDraft, removeQuizDraft, writeQuizDraft } from "./quizDraft";
 
 describe("local quiz drafts", () => {
+  it("accepts legacy missing SRS fields and validates new optional values", () => {
+    const template={spendingProfile:undefined,srsPlanning:{includeSrs:false},srsContributionStartAge:undefined};
+    expect(matchesQuizShape({},template)).toBe(true);
+    expect(matchesQuizShape({srsPlanning:{includeSrs:true,srsAnnualContribution:12000,otherTaxableIncome:{annualAmount:12000,startAge:65,endAge:80,growthRate:0}},srsContributionStartAge:30},template)).toBe(true);
+    expect(matchesQuizShape({srsPlanning:{srsAnnualContribution:"invalid"}},template)).toBe(false);
+    expect(matchesQuizShape({spendingProfile:{adults:2,dependants:[{label:{}}]}},template)).toBe(false);
+  });
   const createStore = () => { const data = new Map<string, string>(); return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => { data.set(k, v); }, removeItem: (k: string) => { data.delete(k); } }; };
   const validate = (v: unknown): v is { age: number } => matchesQuizShape(v, { age: 30 });
   it("round trips a draft and isolates individual and couple plans", () => { const s = createStore(); expect(writeQuizDraft(s, "individual", { age: 62 })).toBe(true); expect(readQuizDraft(s, "individual", validate)?.data.age).toBe(62); expect(readQuizDraft(s, "couple", validate)).toBeNull(); expect(removeQuizDraft(s, "individual")).toBe(true); expect(readQuizDraft(s, "individual", validate)).toBeNull(); });

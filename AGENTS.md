@@ -1,5 +1,19 @@
 # RetirementReadiness
 
+## Household budgets and SRS (September 2026)
+
+- Lifestyle samples are planner-designed illustrations informed by SingStat HES 2023, never official recommended budgets. Its $5,931 all-household and $2,349 solely non-employed age-65-plus household averages describe different populations. Keep the source and category explanation in a tap-to-open dialog. Preserve custom spending when household composition changes.
+- Count adult retirement spending once; optional dependant support is additional, inflated from today's SGD and stops when the dependant reaches the selected support-end age. Household spending does not imply that a partner's resources have been entered.
+- Cash, ordinary investment and SRS contributions are separate commitments. Keep SRS in the resources/contribution step, and include its monthly equivalent in the take-home plausibility check. Do not deduct these planned SRS contributions again from already-net cash savings.
+- Shared SRS rules live in src/utils/srsPlanning.ts. Keep each partner's SRS and tax separate. Contribution citizenship status determines the $15,300/$35,700 cap; retirement tax residency determines withdrawal tax treatment.
+- First SRS contribution (not empty account opening) before 1 July 2022 locks age 62, July 2022 through June 2026 locks 63, and from July 2026 uses 64 under current rules. Recheck future statutory changes. Previously begun withdrawal windows are outside this new-window planner.
+- Qualifying SRS withdrawals are 50% taxable. Add other entered taxable retirement income before applying current income-tax rates. Incremental SRS tax plus tax on other income must reconcile to total tax, with no second withholding deduction. This model reserves tax in the same annual row and excludes reliefs, rebates and contribution tax refunds.
+- The annual cash-liquidation scenario clears SRS in the tenth annual withdrawal row. Legally the residual is deemed withdrawn after the exact ten-year window; physical sale is not always required. State the annual timing approximation and exclude SRS life-annuity mechanics.
+- Compare smooth taxable-income and fixed-initial-tenth schedules as illustrative alternatives. Lower estimated tax is not a guarantee of greater wealth or a globally optimal withdrawal recommendation. Show gross, incremental tax and net separately; only net income actually used belongs in the spending-funding stack.
+- SRS asset categories document assumptions, not product eligibility guarantees or live yield quotes. Confirm individual instruments with the SRS operator. Other taxable income entered here must not also appear as a custom recurring stream.
+- Preserve old saved quizzes when optional fields are absent and validate populated optional objects. Check real individual and couple flows, Excel reconciliation, 320px/390px mobile, both themes, dialog Escape/focus and reduced-motion behavior.
+- Relevant official sources: https://www.singstat.gov.sg/publications/households/household-expenditure-survey ; https://www.iras.gov.sg/taxes/individual-income-tax/basics-of-individual-income-tax/special-tax-schemes/tax-on-srs-withdrawals ; https://www.mof.gov.sg/news-resources/supplementary-retirement-scheme/ . Rules checked 8 September 2026.
+
 - This is the standalone RetirementReadiness repo, not Common Cents. Verify root, branch, remote and working tree before changes.
 - Approved visual direction (8 September 2026): Ink & Cobalt, option C. Shared theme tokens live in `src/theme.css`, imported last in `src/main.tsx`.
 - Light: neutral #f2f3f5 background, white surfaces, #20242b text, cobalt #2d58b5 actions, visible borders. Dark: #161719 background, #232529 surfaces, #8aafff cobalt actions with dark text.

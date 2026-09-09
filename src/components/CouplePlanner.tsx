@@ -8,6 +8,7 @@ import { CoupleOnboardingWizard } from "./CoupleOnboardingWizard";
 import { HouseholdCpfCosts } from "./HouseholdCpfCosts";
 import { RateAssumptions } from "./RateAssumptions";
 import { ExcelDownload } from "./ExcelDownload";
+import { HouseholdSrsDetails } from "./HouseholdSrsDetails";
 
 type CoupleMode = "onboarding" | "processing" | "results" | "edit";
 type ChartView = "combined" | "person-1" | "person-2";
@@ -77,8 +78,8 @@ export function CouplePlanner({ onExit }: { onExit: () => void }) {
     person2CpfLife: Math.round(row.people[1].cpfLifeIncome),
     person1SrsIncome: Math.round(row.people[0].srsNetWithdrawal),
     person2SrsIncome: Math.round(row.people[1].srsNetWithdrawal),
-    person1OtherIncome: Math.round(row.people[0].customIncome),
-    person2OtherIncome: Math.round(row.people[1].customIncome),
+    person1OtherIncome: Math.round(row.people[0].customIncome + row.people[0].otherTaxableIncome - row.people[0].otherIncomeTax),
+    person2OtherIncome: Math.round(row.people[1].customIncome + row.people[1].otherTaxableIncome - row.people[1].otherIncomeTax),
     oneTimeInflow: Math.round(row.oneTimeInflow),
     oneTimeOutflow: Math.round(row.oneTimeOutflow),
     passiveIncome: Math.round(row.passiveIncome),
@@ -245,6 +246,7 @@ export function CouplePlanner({ onExit }: { onExit: () => void }) {
       <section className="year-data-card"><div className="year-data-card__header"><div><h3>Year-by-year household view</h3><p>Annual household totals with each person’s age, owned accounts, other income and shared events.</p></div><button className="secondary-action" type="button" onClick={() => setShowYears((current) => !current)}>{showYears ? "Hide years" : "Show years"}</button></div>{showYears ? <><div className="table-wrap household-year-table"><table><thead><tr><th>Year</th><th>{plan.people[0].label} age</th><th>{plan.people[1].label} age</th><th>Spending</th><th>Event in / out</th><th>{plan.people[0].label} income</th><th>{plan.people[1].label} income</th><th>{plan.people[0].label} CPF / SRS</th><th>{plan.people[1].label} CPF / SRS</th><th>Shared assets</th><th>Shortfall</th></tr></thead><tbody>{projection.rows.map((row) => <tr key={row.calendarYear} className={row.shortfall > 0 ? "has-shortfall" : ""}><td>{row.calendarYear}</td><td>{row.people[0].age}</td><td>{row.people[1].age}</td><td>{formatCurrency(row.householdSpending)}</td><td>{formatCurrency(row.oneTimeInflow)} / {formatCurrency(row.oneTimeOutflow)}</td><td>{formatCurrency(row.people[0].customIncome)}</td><td>{formatCurrency(row.people[1].customIncome)}</td><td>{formatCurrency(row.people[0].cpfOa + row.people[0].cpfSa + row.people[0].cpfMa + row.people[0].cpfRa + row.people[0].cpfLifeReserve)} / {formatCurrency(row.people[0].srsBalance)}</td><td>{formatCurrency(row.people[1].cpfOa + row.people[1].cpfSa + row.people[1].cpfMa + row.people[1].cpfRa + row.people[1].cpfLifeReserve)} / {formatCurrency(row.people[1].srsBalance)}</td><td>{formatCurrency(row.endingCashSavings + row.endingInvestments)}</td><td>{formatCurrency(row.shortfall)}</td></tr>)}</tbody></table></div><div className="household-year-cards">{projection.rows.map((row) => <article key={row.calendarYear} className={row.shortfall > 0 ? "has-shortfall" : ""}><header><strong>{row.calendarYear}</strong><span>{plan.people[0].label} {row.people[0].age} · {plan.people[1].label} {row.people[1].age}</span></header><dl><div><dt>Household spending</dt><dd>{formatCurrency(row.householdSpending)}</dd></div>{row.oneTimeInflow || row.oneTimeOutflow ? <div><dt>Event inflow / outflow</dt><dd>{formatCurrency(row.oneTimeInflow)} / {formatCurrency(row.oneTimeOutflow)}</dd></div> : null}<div><dt>{plan.people[0].label} CPF / SRS / other income</dt><dd>{formatCurrency(row.people[0].cpfOa + row.people[0].cpfSa + row.people[0].cpfMa + row.people[0].cpfRa + row.people[0].cpfLifeReserve)} / {formatCurrency(row.people[0].srsBalance)} / {formatCurrency(row.people[0].customIncome)}</dd></div><div><dt>{plan.people[1].label} CPF / SRS / other income</dt><dd>{formatCurrency(row.people[1].cpfOa + row.people[1].cpfSa + row.people[1].cpfMa + row.people[1].cpfRa + row.people[1].cpfLifeReserve)} / {formatCurrency(row.people[1].srsBalance)} / {formatCurrency(row.people[1].customIncome)}</dd></div><div><dt>Shortfall</dt><dd>{formatCurrency(row.shortfall)}</dd></div></dl></article>)}</div></> : null}</section>
 
       <HouseholdCpfCosts rows={projection.rows} />
+      <HouseholdSrsDetails rows={projection.rows} />
       <footer className="app-footer"><strong>Educational projection—not financial advice or a product recommendation.</strong><span>CPF LIFE payouts and SRS tax are estimates. Confirm personal figures with official CPF and SRS information before making decisions.</span></footer>
     </section>
   );

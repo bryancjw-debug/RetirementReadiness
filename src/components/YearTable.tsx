@@ -21,6 +21,7 @@ const columnsByPreset: Record<TablePreset, Column[]> = {
     { key: "cpf", label: "CPF Total", value: (row) => money(row.cpfTotal) },
     { key: "srs", label: "SRS Balance", value: (row) => money(row.srsBalance) },
     { key: "spending", label: "Spending", value: (row) => money(row.spendingNeed) },
+    { key: "dependants", label: "Dependant Support Included", value: (row) => money(row.dependantSpending) },
     { key: "shortfall", label: "Shortfall", value: (row) => money(row.shortfall) },
     { key: "wealth", label: "Total Wealth", value: (row) => money(row.endingBalance) }
   ],
@@ -29,6 +30,9 @@ const columnsByPreset: Record<TablePreset, Column[]> = {
     { key: "cpf-life", label: "CPF LIFE", value: (row) => money(row.cpfLifeIncome) },
     { key: "dividends", label: "Dividends", value: (row) => money(row.passiveIncomeGenerated) },
     { key: "custom", label: "Custom Income", value: (row) => money(row.customIncomeGenerated) },
+    { key: "other-taxable", label: "Other Taxable Income", value: (row) => money(row.otherTaxableIncome) },
+    { key: "other-tax", label: "Tax On Other Income", value: (row) => money(row.otherIncomeTax) },
+    { key: "total-tax", label: "Total Income Tax Reserved", value: (row) => money(row.totalIncomeTax) },
     { key: "srs-contribution", label: "SRS Contribution", value: (row) => money(row.srsContribution) },
     { key: "srs-growth", label: "SRS Growth", value: (row) => money(row.srsGrowth) },
     { key: "srs-gross", label: "SRS Gross Withdrawal", value: (row) => money(row.srsWithdrawal) },

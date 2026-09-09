@@ -1,5 +1,9 @@
 import { QuizDraftControls } from "./QuizDraftControls";
 import { RateAssumptions } from "./RateAssumptions";
+import { SrsPlanner } from "./SrsPlanner";
+import { useQuizTransition } from "./useQuizTransition";
+import { LifestylePlanner } from "./LifestylePlanner";
+import { dependantSpendingForYear } from "../utils/lifestyle";
 import { matchesQuizShape } from "../utils/quizDraft";
 import { QuizNumberQuestion as RangeQuestion } from "./QuizNumberQuestion";
 import { QuizProgress } from "./QuizProgress";
@@ -80,12 +84,13 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
   const draft = useMemo(() => ({ plan, step, activePerson, refineAdvanced, refineSrs, addCpfBalances, refineCpf, cpfPart, resourcesConfirmed }), [plan, step, activePerson, refineAdvanced, refineSrs, addCpfBalances, refineCpf, cpfPart, resourcesConfirmed]);
   useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); document.getElementById("couple-step-title")?.focus({ preventScroll: true }); }, [step, cpfPart, activePerson]);
   const person = plan.people[activePerson];
+  useQuizTransition(step * 10 + activePerson * 4 + cpfPart);
   const firstRetirementOffset = Math.min(...plan.people.map((item) => item.inputs.retirementAge - item.inputs.currentAge));
   const bothRetiredOffset = Math.max(...plan.people.map((item) => item.inputs.retirementAge - item.inputs.currentAge));
   const spendingStartOffset = plan.retirementStart === "first" ? firstRetirementOffset : bothRetiredOffset;
   const futureMonthlySpending = useMemo(() => (
-    plan.retirementSpendingAnnual / 12 * Math.pow(1 + plan.retirementSpendingInflationRate / 100, spendingStartOffset)
-  ), [plan.retirementSpendingAnnual, plan.retirementSpendingInflationRate, spendingStartOffset]);
+    (plan.retirementSpendingAnnual * Math.pow(1 + plan.retirementSpendingInflationRate / 100, spendingStartOffset) + dependantSpendingForYear(plan.spendingProfile, spendingStartOffset, plan.retirementSpendingInflationRate)) / 12
+  ), [plan.retirementSpendingAnnual, plan.spendingProfile, plan.retirementSpendingInflationRate, spendingStartOffset]);
 
   function updatePlan<K extends keyof HouseholdPlan>(key: K, value: HouseholdPlan[K]) {
     setPlan((current) => ({ ...current, [key]: value, ...(["currentInvestments", "preRetirementInvestmentReturnRate"].includes(key) ? { investmentMix: undefined } : {}), ...(["retirementReturnRate", "passiveIncomeYieldRate"].includes(key) ? { retirementInvestmentMix: undefined } : {}) }));
@@ -171,7 +176,7 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
       onComplete(plan);
       return;
     }
-    setStep((current) => current + 1);
+    setStep((current) => current === 4 ? 6 : current + 1);
     setActivePerson(0);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -183,7 +188,7 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
       setCpfPart(plan.people[0].inputs.includeCpf && plan.people[0].residency !== "Foreigner" ? 3 : 0);
       return;
     }
-    if (step === 5) {
+    if (step === 5 || step === 6) {
       setStep(4);
       setActivePerson(1);
       setCpfPart(plan.people[1].inputs.includeCpf && plan.people[1].residency !== "Foreigner" ? 3 : 0);
@@ -226,13 +231,7 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
       </Step> : null}
 
       {step === 2 ? <Step eyebrow="One household lifestyle" title="What might both of you spend each month in retirement?" intro="Enter one household amount in today’s dollars. Shared costs are counted once rather than duplicated across two people.">
-        <div className="quiz-choice-grid quiz-choice-grid--three">
-          {[
-            [4_000, "Essentials-focused", "Core household needs with modest leisure."],
-            [6_000, "Comfortable", "Room for leisure, family activities and occasional travel."],
-            [8_500, "More flexibility", "More room for travel, hobbies and family support."]
-          ].map(([amount, label, note]) => <ChoiceCard key={amount} title={`${label} · ${formatCurrency(Number(amount))}/month`} description={String(note)} selected={plan.retirementSpendingAnnual / 12 === amount} onClick={() => updatePlan("retirementSpendingAnnual", Number(amount) * 12)} />)}
-        </div>
+        <LifestylePlanner profile={plan.spendingProfile ?? { adults: 2, dependants: [] }} onChange={profile => updatePlan("spendingProfile", profile)} onPreset={amount => updatePlan("retirementSpendingAnnual", amount * 12)} currentAge={plan.people[0].inputs.currentAge} retirementAge={plan.people[0].inputs.currentAge + spendingStartOffset} monthlyBase={plan.retirementSpendingAnnual / 12} />
         <div className="quiz-subsection"><RangeQuestion label="Household monthly spending today" helper="A shared household amount, not an amount per person." value={plan.retirementSpendingAnnual / 12} min={2_500} max={15_000} step={250} onChange={(value) => updatePlan("retirementSpendingAnnual", value * 12)} format={(value) => `${formatCurrency(value)}/mo`} quickValues={[4_000, 6_000, 8_500, 12_000]} /></div>
         <div className="future-value-reveal"><div><span>Today</span><strong>{formatCurrency(plan.retirementSpendingAnnual / 12)}</strong></div><ArrowRight size={20} /><div><span>When spending starts</span><strong>{formatCurrency(futureMonthlySpending)}</strong></div><p>Uses {plan.retirementSpendingInflationRate}% annual inflation over {spendingStartOffset} years.</p></div>
       </Step> : null}
@@ -251,6 +250,8 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
         </div>
       </Step> : null}
 
+      {step === 3 ? <section className="quiz-stack" aria-label="Individual SRS contributions">{plan.people.map((item, index) => <section key={item.id}><h3>{item.label}: SRS and taxable retirement income</h3><SrsPlanner inputs={item.inputs} onChange={patch => updatePerson(index as 0 | 1, { inputs: { ...item.inputs, ...patch } })} /></section>)}</section> : null}
+
       {step === 4 ? <Step eyebrow="Individual CPF journeys" title="Let’s add CPF one person at a time." intro="CPF contribution, allocation, age-55 and CPF LIFE milestones remain separate. Household results combine the income only when each payout begins.">
         <div className="person-tabs" role="tablist">{plan.people.map((item, index) => <button type="button" role="tab" aria-selected={activePerson === index} className={`${activePerson === index ? "is-active" : ""} person-tone-${index + 1}`} key={item.id} onClick={() => setActivePerson(index as 0 | 1)}>{item.label}<small>{item.inputs.includeCpf ? "CPF included" : "CPF not included"}</small></button>)}</div>
         <article className={`person-detail-card person-tone-${activePerson + 1}`}>
@@ -259,7 +260,7 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
           <div className="quiz-choice-grid quiz-choice-grid--three">
             {(["Singapore Citizen", "Permanent Resident", "Foreigner"] as HouseholdResidency[]).map((option) => <ChoiceCard compact key={option} title={option} selected={person.residency === option} onClick={() => updateResidency(activePerson, option)} />)}
           </div>
-          {person.residency === "Foreigner" ? <div className="education-callout"><CircleHelp size={19} /><p>CPF is not included for this person. SRS can still be modelled separately on the next step.</p></div> : <>
+          {person.residency === "Foreigner" ? <div className="education-callout"><CircleHelp size={19} /><p>CPF is not included for this person. SRS can still be modelled separately under Resources.</p></div> : <>
             <div className="quiz-subsection"><span className="quiz-subsection__label">Include {person.label.trim().toLowerCase() === "you" ? "your" : possessiveLabel(person.label)} CPF?</span><div className="segmented-choice"><button className={person.inputs.includeCpf ? "is-selected" : ""} type="button" onClick={() => updatePersonInput(activePerson, "includeCpf", true)}>Yes</button><button className={!person.inputs.includeCpf ? "is-selected" : ""} type="button" onClick={() => updatePersonInput(activePerson, "includeCpf", false)}>Not now</button></div></div>
             {person.inputs.includeCpf ? <>
               {cpfPart === 0 ? <>
@@ -313,27 +314,7 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
         </article>
       </Step> : null}
 
-      {step === 5 ? <Step eyebrow="Individual SRS journeys" title="Would either person like SRS included?" intro="SRS is optional and calculated separately for each person. The projection shows contributions, growth, gross withdrawals, estimated tax and net withdrawals.">
-        <div className="person-tabs" role="tablist">{plan.people.map((item, index) => <button type="button" role="tab" aria-selected={activePerson === index} className={`${activePerson === index ? "is-active" : ""} person-tone-${index + 1}`} key={item.id} onClick={() => setActivePerson(index as 0 | 1)}>{item.label}<small>{item.inputs.includeSrs ? "SRS included" : "SRS not included"}</small></button>)}</div>
-        <article className={`person-detail-card person-tone-${activePerson + 1}`}>
-          <div className="person-detail-card__header"><div><span>{person.label}</span><h3>SRS assumptions</h3></div><Sparkles size={24} /></div>
-          <div className="segmented-choice"><button className={person.inputs.includeSrs ? "is-selected" : ""} type="button" onClick={() => updatePersonInput(activePerson, "includeSrs", true)}>Include SRS</button><button className={!person.inputs.includeSrs ? "is-selected" : ""} type="button" onClick={() => updatePersonInput(activePerson, "includeSrs", false)}>Not now</button></div>
-          {person.inputs.includeSrs ? <div className="quiz-stack quiz-subsection">
-            <RangeQuestion label="Current SRS balance" helper="This person’s SRS account balance today." value={person.inputs.srsCurrentBalance} min={0} max={500_000} step={5_000} onChange={(value) => updatePersonInput(activePerson, "srsCurrentBalance", value)} format={(value) => formatCurrency(value, { compact: value >= 100_000 })} quickValues={[0, 25_000, 50_000, 100_000, 250_000]} />
-            <RangeQuestion label="Annual SRS contribution" helper={`Capped at ${formatCurrency(srsContributionCap(person.inputs))} for this residency in the model.`} value={Math.min(person.inputs.srsAnnualContribution, srsContributionCap(person.inputs))} min={0} max={srsContributionCap(person.inputs)} step={100} onChange={(value) => updatePersonInput(activePerson, "srsAnnualContribution", value)} format={(value) => `${formatCurrency(value)}/yr`} quickValues={[0, 5_000, 10_000, srsContributionCap(person.inputs)]} />
-            <div><span className="quiz-subsection__label">When was the first SRS contribution made?</span><div className="quiz-choice-grid quiz-choice-grid--two">{([
-              "Before 1 July 2022", "1 July 2022 To 30 June 2026", "From 1 July 2026", "Not Sure"
-            ] as SrsFirstContributionPeriod[]).map((option) => <ChoiceCard compact key={option} title={option} selected={person.inputs.srsFirstContributionPeriod === option} onClick={() => updateSrsPeriod(activePerson, option)} />)}</div></div>
-            <div className="education-callout"><CircleHelp size={19} /><p>The model begins withdrawals from age {person.inputs.srsFirstWithdrawalAge} and spreads qualifying withdrawals across ten years. Estimated tax assumes no other taxable income.</p></div>
-            <div className="quiz-subsection"><span className="quiz-subsection__label">Refine {person.label.trim().toLowerCase() === "you" ? "your" : possessiveLabel(person.label)} SRS assumptions?</span><div className="segmented-choice"><button type="button" className={!refineSrs[activePerson] ? "is-selected" : ""} onClick={() => setRefineSrs((current) => current.map((value, index) => index === activePerson ? false : value) as [boolean, boolean])}>Keep starting assumptions</button><button type="button" className={refineSrs[activePerson] ? "is-selected" : ""} onClick={() => setRefineSrs((current) => current.map((value, index) => index === activePerson ? true : value) as [boolean, boolean])}>Fine tune</button></div></div>
-            {refineSrs[activePerson] ? <div className="advanced-quiz-panel quiz-stack">
-              <RangeQuestion label="SRS return assumption" helper="Annual growth assumed for this person’s SRS balance. It is not guaranteed." value={person.inputs.srsReturnRate} min={0} max={8} step={0.5} onChange={(value) => updatePersonInput(activePerson, "srsReturnRate", value)} format={(value) => `${value.toFixed(1)}%`} quickValues={[1, 2.5, 4]} />
-              <RangeQuestion label="SRS contribution end age" helper="Future contributions stop at this age or retirement, whichever comes first." value={person.inputs.srsContributionEndAge} min={person.inputs.currentAge} max={person.inputs.retirementAge} step={1} onChange={(value) => updatePersonInput(activePerson, "srsContributionEndAge", value)} format={(value) => `Age ${value}`} quickValues={[55, 60, person.inputs.retirementAge]} />
-              <div><span className="quiz-subsection__label">Withdrawal approach</span><div className="quiz-choice-grid quiz-choice-grid--two">{(["Tax Aware", "Even Over Ten Years"] as SrsWithdrawalStrategy[]).map((option) => <ChoiceCard compact key={option} title={option} description={option === "Tax Aware" ? "Recalculates an even remaining balance each year." : "Uses one-tenth of the opening withdrawal balance."} selected={person.inputs.srsWithdrawalStrategy === option} onClick={() => updatePersonInput(activePerson, "srsWithdrawalStrategy", option)} />)}</div></div>
-            </div> : null}
-          </div> : <div className="education-callout"><CircleHelp size={19} /><p>No SRS balance, contribution, growth or withdrawal is included for {person.label}.</p></div>}
-        </article>
-      </Step> : null}
+      {step === 5 ? <Step eyebrow="SRS planning" title="SRS is now alongside your savings." intro="Contributions and taxable income are managed together in Resources."><button type="button" className="primary-action" onClick={() => setStep(3)}>Review resources and SRS</button></Step> : null}
 
       {step === 6 ? <Step eyebrow="Events and other income" title="Could anything else materially affect the household journey?" intro="Add only items you want the projection to count. Shared events are counted once; recurring income remains attached to the person who receives it.">
         <div className="optional-question-block">
@@ -346,7 +327,7 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
             <div><span className="quiz-subsection__label">How certain is this event?</span><div className="segmented-choice"><button type="button" className={plan.oneTimeEvents[0]?.certainty !== "possible" ? "is-selected" : ""} onClick={() => updateHouseholdEvent({ certainty: "expected" })}>Expected</button><button type="button" className={plan.oneTimeEvents[0]?.certainty === "possible" ? "is-selected" : ""} onClick={() => updateHouseholdEvent({ certainty: "possible" })}>Possible</button></div></div>
           </div> : null}
         </div>
-        <div className="quiz-subsection"><span className="quiz-subsection__label">Recurring retirement income by person</span><p className="range-disclosure">Examples include rental income, a policy or annuity payout, and part-time income. Do not add CPF LIFE or SRS here—they are already modelled separately.</p></div>
+        <div className="quiz-subsection"><span className="quiz-subsection__label">Recurring retirement income by person</span><p className="range-disclosure">Enter non-taxable or already-net-of-tax income here. Taxable rental income belongs under Resources and SRS. Do not duplicate income, CPF LIFE or SRS.</p></div>
         <div className="person-tabs" role="tablist">{plan.people.map((item, index) => <button type="button" role="tab" aria-selected={activePerson === index} className={`${activePerson === index ? "is-active" : ""} person-tone-${index + 1}`} key={item.id} onClick={() => setActivePerson(index as 0 | 1)}>{item.label}<small>{item.inputs.customIncomeStreams.length ? "Income included" : "No extra income"}</small></button>)}</div>
         <article className={`person-detail-card person-tone-${activePerson + 1}`}>
           <div className="person-detail-card__header"><div><span>{person.label}</span><h3>Other retirement income</h3></div><Sparkles size={24} /></div>
@@ -372,7 +353,7 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
 
       {step === 8 ? <Step eyebrow="Review together" title="Here is the household retirement picture we’ll test." intro="Shared spending, events and non-CPF resources are counted once. CPF, SRS and other income remain attached to each person until the household result layer.">
         <RateAssumptions value={plan} onChange={patch => setPlan(current => ({ ...current, ...patch }))} monthlyContribution={plan.people.reduce((sum, person) => sum + person.inputs.investmentContribution, 0)} />
-        <div className="review-edit-links" aria-label="Edit household answers">{stepLabels.slice(0, 8).map((label, index) => <button type="button" className="secondary-action" key={label} onClick={() => setStep(index)}>Edit {label}</button>)}</div><div className="review-grid">
+        <div className="review-edit-links" aria-label="Edit household answers">{stepLabels.slice(0, 8).map((label, index) => <button type="button" className="secondary-action" key={label} onClick={() => setStep(index === 5 ? 3 : index)}>Edit {label}</button>)}</div><div className="review-grid">
           <article><span>Household lifestyle</span><strong>{formatCurrency(plan.retirementSpendingAnnual / 12)}/month today</strong><small>{formatCurrency(futureMonthlySpending)}/month when modelled spending begins</small></article>
           <article><span>Shared starting resources</span><strong>{formatCurrency(plan.currentCashSavings + plan.currentInvestments)}</strong><small>{formatCurrency(plan.currentCashSavings)} cash · {formatCurrency(plan.currentInvestments)} invested</small></article>
           <article><span>Shared event</span><strong>{plan.includeOneTimeEvents ? plan.oneTimeEvents[0]?.label ?? "Included" : "Not included"}</strong><small>{plan.oneTimeEvents[0]?.certainty === "possible" ? "Possible—compare without it later" : "Counted once at household level"}</small></article>

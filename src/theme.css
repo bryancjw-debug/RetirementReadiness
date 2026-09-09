@@ -1,4 +1,39 @@
 /* Approved Ink & Cobalt theme. Imported last; financial logic remains unchanged. */
+.planning-dialog { color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 24px; width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); overflow: auto; box-sizing: border-box; box-shadow: var(--shadow); }
+.planning-dialog::backdrop { background: #0008; }
+.planning-dialog header { display:flex; align-items:start; justify-content:space-between; gap:16px; }
+.planning-dialog h2 { font-size:24px; line-height:1.3; }
+.planning-dialog p { line-height:1.6; color:var(--muted); }
+.planning-dialog a, .source-button { color:var(--primary); }
+.source-button { background:transparent; border:0; display:flex; align-items:center; gap:8px; min-height:44px; text-align:left; padding:8px 0; }
+.budget-infographic { display:grid; gap:16px; }
+.budget-infographic > div { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 12px; }
+.budget-infographic dd { margin:0; font-weight:600; }
+.budget-infographic meter { grid-column:1/-1; width:100%; height:12px; accent-color:var(--primary); }
+.dependant-fields { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; padding:16px 0; border-bottom:1px solid var(--line); }
+.dependant-fields > strong { grid-column:1/3; }
+.dependant-fields > button { justify-self:end; }
+.srs-planner { border-top:1px solid var(--line); padding-top:24px; }
+.srs-planner .cpf-answer-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+.srs-planner select { max-width:100%; min-width:0; }
+.srs-planner .quiz-text-field select, .dependant-fields input, section[aria-label="Retirement household spending"] select, section[aria-label="Household SRS and tax details"] select { width:100%; min-height:48px; padding:12px; border:1px solid var(--line-strong); border-radius:8px; background:var(--input-bg); color:var(--text); font:inherit; box-sizing:border-box; }
+.lifestyle-preset, .srs-strategy { align-content:start; }
+.lifestyle-preset > span:last-child, .srs-strategy > span:last-child { min-width:0; }
+.lifestyle-preset strong, .srs-strategy strong { font-size:1rem; line-height:1.35; overflow-wrap:normal; }
+.lifestyle-preset small, .srs-strategy small { overflow-wrap:normal; }
+.srs-strategy { min-height:132px; }
+.srs-strategy-grid { margin-top:16px; }
+.srs-planner { padding-bottom:88px; }
+@media (min-width: 701px) { .srs-planner { padding-bottom:24px; } }
+.planning-dialog .icon-button, .dependant-fields .icon-button { display:grid; place-items:center; min-width:44px; min-height:44px; border:1px solid var(--line); border-radius:8px; background:var(--surface-soft); color:var(--text); }
+.planning-dialog header { position:sticky; top:-24px; padding:12px 0; background:var(--surface); z-index:1; }
+.funding-other i { background:var(--chart-warning); }
+@media (max-width:600px) { .dependant-fields, .srs-planner .cpf-answer-grid { grid-template-columns:minmax(0,1fr); } .dependant-fields > strong { grid-column:1; } .planning-dialog { padding:18px; } }
+@media (prefers-reduced-motion:no-preference) {
+  .welcome-readiness-ring { animation:readiness-arrive 900ms ease-out both; }
+  .welcome-wealth-preview { animation:readiness-arrive 1100ms ease-out both; }
+  @keyframes readiness-arrive { from { opacity:.25; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+}
 :root, :root[data-theme="light"] {
   --bg: #f2f3f5;
   --bg-2: #e9ecf1;

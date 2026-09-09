@@ -49,7 +49,20 @@ export interface OneTimeFinancialEvent {
   certainty?: OneTimeEventCertainty;
 }
 
+export interface DependantBudget {
+  id: string;
+  label: string;
+  currentAge: number;
+  supportUntilAge: number;
+  monthlyAmountToday: number;
+}
+
 export interface RetirementInputs {
+  spendingProfile?: { adults: 1 | 2; dependants: DependantBudget[] };
+  retirementTaxResidency?: "Resident" | "Non-resident";
+  otherTaxableIncome?: { annualAmount: number; startAge: number; endAge: number; growthRate: number };
+  srsContributionStartAge?: number;
+  srsAssetCategory?: string;
   investmentMix?: import("./utils/investmentMix").InvestmentMixItem[];
   retirementInvestmentMix?: import("./utils/investmentMix").InvestmentMixItem[];
   retirementTopUp?: { enabled: boolean; annualAmount: number; startAge: number; endAge: number };
@@ -116,6 +129,10 @@ export interface RetirementInputs {
 }
 
 export interface RetirementYear {
+  dependantSpending: number;
+  otherTaxableIncome: number;
+  otherIncomeTax: number;
+  totalIncomeTax: number;
   cpfRetirementTopUp: number;
   cpfRetirementTopUpUnfilled: number;
   insurancePremiumTotal: number;
