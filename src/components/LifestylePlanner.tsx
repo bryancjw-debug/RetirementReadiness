@@ -14,6 +14,9 @@ export function LifestylePlanner({ profile, onChange, onPreset, currentAge, reti
   const dialog = useRef<HTMLDialogElement>(null);
   const [example, setExample] = useState(() => Math.max(0, lifestyleBudgets.findIndex(preset => monthlyBase === preset.single || monthlyBase === preset.couple)));
   const amount = value.adults === 1 ? lifestyleBudgets[example].single : lifestyleBudgets[example].couple;
+  const yearsUntilRetirement = Math.max(0, retirementAge - currentAge);
+  const dependantSupportAtRetirement = dependantSpendingForYear(value, yearsUntilRetirement, 0) / 12;
+  const hasDependantsAtRetirement = dependantSupportAtRetirement > 0;
   return <section className="quiz-stack quiz-subsection" aria-label="Retirement household spending">
     <fieldset className="cpf-question-group"><legend>Who will this retirement budget support?</legend>
       <div className="quiz-choice-grid quiz-choice-grid--three">{["Just me", "Two adults", "Adults with dependants"].map((label, index) => <button type="button" className={`quiz-choice is-compact ${index === (family ? 2 : value.adults - 1) ? "is-selected" : ""}`} aria-pressed={index === (family ? 2 : value.adults - 1)} key={label}
@@ -30,11 +33,12 @@ export function LifestylePlanner({ profile, onChange, onPreset, currentAge, reti
       <p className="cpf-question-note">$750/month is an editable planning placeholder, not a SingStat child-cost estimate. Support stops at the entered age. Exclude these amounts from the adult lifestyle budget to avoid double-counting.</p>
     </> : null}
     {showPresets ? <div className="quiz-choice-grid quiz-choice-grid--three">{lifestyleBudgets.map((preset,index) => {
-      const total = value.adults === 1 ? preset.single : preset.couple;
-      return <button type="button" className={`quiz-choice lifestyle-preset ${monthlyBase === total ? "is-selected" : ""}`} aria-pressed={monthlyBase === total} key={preset.label} onClick={() => { setExample(index); onPreset(total); }}><span className="quiz-choice__check" aria-hidden="true">{monthlyBase === total ? <Check size={16} /> : null}</span><span><strong>{preset.label}</strong><small>{formatCurrency(total)}/month · {value.adults === 1 ? "one adult" : "two adults"}</small><small>Dependant support is added separately</small></span></button>;
+      const adultBudget = value.adults === 1 ? preset.single : preset.couple;
+      const retirementTotal = adultBudget + dependantSupportAtRetirement;
+      return <button type="button" className={`quiz-choice lifestyle-preset ${monthlyBase === adultBudget ? "is-selected" : ""}`} aria-pressed={monthlyBase === adultBudget} key={preset.label} onClick={() => { setExample(index); onPreset(adultBudget); }}><span className="quiz-choice__check" aria-hidden="true">{monthlyBase === adultBudget ? <Check size={16} /> : null}</span><span><strong>{preset.label}</strong><small>{formatCurrency(retirementTotal)}/month at retirement</small><small>{formatCurrency(adultBudget)} adult budget{hasDependantsAtRetirement ? ` + ${formatCurrency(dependantSupportAtRetirement)} dependant support` : value.dependants.length ? " · entered support ends before retirement" : ""}</small></span></button>;
     })}</div> : null}
     <button type="button" className="source-button" onClick={() => dialog.current?.showModal()}><Info size={18} /> How were these examples estimated?</button>
-    {value.dependants.length ? <p className="education-callout">Additional dependant support at retirement, in today's prices: {formatCurrency(dependantSpendingForYear(value, Math.max(0, retirementAge - currentAge), 0) / 12)}/month.</p> : null}
+    {value.dependants.length ? <p className="education-callout">{hasDependantsAtRetirement ? <>Additional dependant support still active at retirement, in today's prices: <strong>{formatCurrency(dependantSupportAtRetirement)}/month</strong>. This is included in the totals above and added separately in the projection.</> : <>Based on the ages entered, dependant support ends before retirement. It is therefore not added to the retirement lifestyle totals or retirement spending projection.</>}</p> : null}
     <dialog ref={dialog} className="planning-dialog" aria-labelledby="lifestyle-dialog-title" onClick={e => { if (e.target === e.currentTarget) { const r=e.currentTarget.getBoundingClientRect(); if(e.clientX<r.left || e.clientX>r.right || e.clientY<r.top || e.clientY>r.bottom) dialog.current?.close(); } }}>
       <header><h2 id="lifestyle-dialog-title">Behind the lifestyle examples</h2><button autoFocus type="button" className="icon-button" aria-label="Close spending explanation" onClick={() => dialog.current?.close()}><X /></button></header>
       <p>SingStat's Household Expenditure Survey 2023 reported $5,931/month across resident households and $2,349/month for households comprising solely non-employed people aged 65 and over. These describe different populations, not one-person or two-person recommended budgets.</p>

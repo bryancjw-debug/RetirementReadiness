@@ -620,7 +620,7 @@ export function sanitizeInputs(inputs: RetirementInputs): RetirementInputs {
     srsResidency: inputs.srsResidency ?? "Singapore Citizen Or Permanent Resident",
     srsFirstContributionPeriod: inputs.srsFirstContributionPeriod ?? "Not Sure",
     srsWithdrawalStrategy: inputs.srsWithdrawalStrategy ?? "Tax Aware",
-    srsCurrentBalance: Math.min(400_000, clampNonNegative(inputs.srsCurrentBalance)),
+    srsCurrentBalance: Math.min(500_000, clampNonNegative(inputs.srsCurrentBalance)),
     srsAnnualContribution: Math.min(clampNonNegative(inputs.srsAnnualContribution), srsContributionCap(inputs)),
     srsContributionEndAge: Math.min(endAge, Math.max(currentAge, Math.floor(clampNonNegative(inputs.srsContributionEndAge)))),
     srsContributionStartAge: Math.max(currentAge, Math.floor(clampNonNegative(inputs.srsContributionStartAge ?? currentAge))),

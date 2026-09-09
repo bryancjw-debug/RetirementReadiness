@@ -40,7 +40,7 @@ describe("SRS and household budgets", () => {
   });
   it("bounds guided SRS balances, return rates and withdrawal age", () => {
     const safe = sanitizeInputs({...inputs, srsCurrentBalance:900000, srsReturnRate:-4, srsFirstWithdrawalAge:99});
-    expect(safe.srsCurrentBalance).toBe(400000);
+    expect(safe.srsCurrentBalance).toBe(500000);
     expect(safe.srsReturnRate).toBe(0);
     expect(safe.srsFirstWithdrawalAge).toBe(80);
   });

@@ -15,14 +15,17 @@ export function SrsPlanner({ inputs, onChange }: { inputs: RetirementInputs; onC
   const prescribedWithdrawalAge = srsPrescribedRetirementAge(inputs);
   const firstWithdrawalAge = Math.max(inputs.currentAge, prescribedWithdrawalAge, inputs.srsFirstWithdrawalAge);
   const withdrawalAgeMaximum = Math.max(80, inputs.currentAge);
-  const number = (label: string, key: keyof RetirementInputs, min: number, max: number, helper: string, format=(n:number)=>formatCurrency(n)) => <QuizNumberQuestion label={label} value={Number(inputs[key] ?? min)} min={min} max={max} step={key.toLowerCase().includes('age') ? 1 : .1} onChange={n=>onChange({[key]:n})} helper={helper} format={format} />;
+  const number = (label: string, key: keyof RetirementInputs, min: number, max: number, helper: string, format=(n:number)=>formatCurrency(n)) => {
+    const step = key.toLowerCase().includes('age') ? 1 : key === 'srsCurrentBalance' || key === 'srsAnnualContribution' ? 100 : .1;
+    return <QuizNumberQuestion label={label} value={Number(inputs[key] ?? min)} min={min} max={max} step={step} onChange={n=>onChange({[key]:n})} helper={helper} format={format} />;
+  };
   return <section className="quiz-stack quiz-subsection srs-planner" aria-label="SRS contributions and retirement tax">
     <h3>Would you like to include SRS?</h3>
     <div className="segmented-choice"><button type="button" aria-pressed={!inputs.includeSrs} className={!inputs.includeSrs ? "is-selected" : ""} onClick={()=>onChange({includeSrs:false})}>Not now</button><button type="button" aria-pressed={inputs.includeSrs} className={inputs.includeSrs ? "is-selected" : ""} onClick={()=>onChange({includeSrs:true,retirementTaxResidency:selectedTaxResidency,srsFirstWithdrawalAge:Math.max(inputs.currentAge,prescribedWithdrawalAge)})}>Include SRS</button></div>
     <p className="cpf-question-note">Cash savings, ordinary investments and SRS are three separate commitments. Enter each amount only once. Existing SRS holdings must not also be included in your ordinary investment balance.</p>
     {inputs.includeSrs ? <>
       <label className="quiz-text-field">SRS contribution status<select value={inputs.srsResidency} onChange={e=>onChange({srsResidency:e.target.value as RetirementInputs['srsResidency']})}><option>Singapore Citizen Or Permanent Resident</option><option>Foreigner</option></select></label>
-      {number('Current SRS balance','srsCurrentBalance',0,400000,'Include investments and uninvested cash inside SRS only. The planner caps this input at $400,000 to keep the guided estimate in a realistic range.')}
+      {number('Current SRS balance','srsCurrentBalance',0,500000,'Include investments and uninvested cash inside SRS only. The planner caps this guided input at $500,000.')}
       {number('Annual SRS contribution','srsAnnualContribution',0,cap,`Separate from cash and investment savings. Annual cap: ${formatCurrency(cap)}. No tax refund is automatically added.`)}
       <p className="education-callout">Total planned monthly commitment: <strong>{formatCurrency(inputs.cashSavingsContribution+inputs.investmentContribution+Math.min(cap,inputs.srsAnnualContribution)/12)}</strong>, including {formatCurrency(Math.min(cap,inputs.srsAnnualContribution)/12)} towards SRS. SRS contributions stop at retirement or before the first withdrawal, whichever is earlier.</p>
       <div className="cpf-answer-grid">
