@@ -6,6 +6,33 @@ import { compareSrsStrategies } from "../utils/srsPlanning";
 import { QuizNumberQuestion } from "./QuizNumberQuestion";
 import { formatCurrency } from "../utils/formatters";
 
+type SrsStrategyResult = ReturnType<typeof compareSrsStrategies>["smooth"];
+
+function strategyTitle(strategy: SrsStrategyResult["strategy"]) {
+  return strategy === "Tax Aware" ? "Smooth taxable income" : "Fixed opening-balance amount";
+}
+
+function strategyExplanation(strategy: SrsStrategyResult["strategy"]) {
+  return strategy === "Tax Aware"
+    ? "Adjusts each year’s withdrawal to keep your estimated taxable income more even. This can reduce tax when you have rental or other taxable retirement income, but the amount received may change each year."
+    : "Withdraws one-tenth of the SRS balance available when the ten-year window opens in each of the first nine years. The tenth year clears everything left, so investment growth can make the final withdrawal different."
+}
+
+function SrsSchedulePreview({ result }: { result: SrsStrategyResult }) {
+  const maximum = Math.max(1, ...result.rows.map((row) => row.withdrawal));
+  return <details className="srs-schedule-preview">
+    <summary>Preview all 10 annual withdrawals</summary>
+    <p>{strategyExplanation(result.strategy)}</p>
+    <ol>
+      {result.rows.map((row) => <li key={row.age}>
+        <div className="srs-schedule-preview__heading"><strong>Age {row.age}</strong><span>{formatCurrency(row.withdrawal)} withdrawn</span></div>
+        <i aria-hidden="true"><b style={{ width: `${Math.max(2, row.withdrawal / maximum * 100)}%` }} /></i>
+        <div className="srs-schedule-preview__details"><span>Tax {formatCurrency(row.tax)}</span><span>Net {formatCurrency(row.net)}</span><span>SRS left {formatCurrency(row.balance)}</span></div>
+      </li>)}
+    </ol>
+  </details>;
+}
+
 export function SrsPlanner({ inputs, onChange }: { inputs: RetirementInputs; onChange: (patch: Partial<RetirementInputs>) => void }) {
   const safe = sanitizeInputs(inputs);
   const comparison = useMemo(()=> inputs.includeSrs ? compareSrsStrategies(safe) : null,[inputs]);
@@ -30,7 +57,7 @@ export function SrsPlanner({ inputs, onChange }: { inputs: RetirementInputs; onC
       <p className="education-callout">Total planned monthly commitment: <strong>{formatCurrency(inputs.cashSavingsContribution+inputs.investmentContribution+Math.min(cap,inputs.srsAnnualContribution)/12)}</strong>, including {formatCurrency(Math.min(cap,inputs.srsAnnualContribution)/12)} towards SRS. SRS contributions stop at retirement or before the first withdrawal, whichever is earlier.</p>
       <div className="cpf-answer-grid">
         {number('First SRS contribution age in this projection','srsContributionStartAge',inputs.currentAge,inputs.endAge,'Future contributions begin at this age.',n=>`Age ${n}`)}
-        {number('Last SRS contribution age','srsContributionEndAge',inputs.currentAge,inputs.endAge,'Inclusive, subject to the first qualifying withdrawal date.',n=>`Age ${n}`)}
+        {number('Last SRS contribution age','srsContributionEndAge',inputs.currentAge,inputs.endAge,'Defaults to your target retirement age. Choose another age only if you expect eligible SRS contributions to continue for a different period.',n=>`Age ${n}`)}
       </div>
       {inputs.srsAnnualContribution > 0 && Math.max(inputs.currentAge, inputs.srsContributionStartAge ?? inputs.currentAge) > Math.min(inputs.srsContributionEndAge, inputs.retirementAge - 1, inputs.srsFirstWithdrawalAge - 1) ? <p className="cpf-input-warning">These dates leave no contribution years before retirement and withdrawal. Adjust the contribution dates to include future SRS additions.</p> : null}
       <label className="quiz-text-field">What will your SRS hold?<select value={inputs.srsAssetCategory ?? 'Mixed eligible portfolio'} onChange={e=>onChange({srsAssetCategory:e.target.value})}>{['Mixed eligible portfolio','Cash / fixed deposits','Eligible bonds / Singapore Government Securities','Eligible shares / ETFs / REITs','Eligible unit trusts'].map(label=><option key={label}>{label}</option>)}</select></label>
@@ -53,9 +80,17 @@ export function SrsPlanner({ inputs, onChange }: { inputs: RetirementInputs; onC
       {safe.srsFirstWithdrawalAge < inputs.retirementAge ? <p className="cpf-input-warning">This saved plan starts SRS withdrawals while you are still working. Salary tax is not included in this estimate. For the retirement-only comparison, set first withdrawal to age {inputs.retirementAge} or later.</p> : null}
       <h3>Compare SRS withdrawal schedules</h3>
       <p>Projected SRS at retirement: <strong>{formatCurrency(comparison.smooth.atRetirement)}</strong>. At first withdrawal, after that year's modelled growth: <strong>{formatCurrency(comparison.smooth.atWithdrawal)}</strong>.</p>
-      <div className="quiz-choice-grid quiz-choice-grid--two srs-strategy-grid">{[comparison.smooth,comparison.even].map(result=>{const selected=inputs.srsWithdrawalStrategy===result.strategy; return <button type="button" key={result.strategy} className={`quiz-choice srs-strategy ${selected?'is-selected':''}`} aria-pressed={selected} onClick={()=>onChange({srsWithdrawalStrategy:result.strategy})}><span className="quiz-choice__check" aria-hidden="true">{selected ? <Check size={16} /> : null}</span><span><strong>{result.strategy==='Tax Aware'?'Smooth taxable income':'Fixed initial tenth'}</strong><small>Estimated additional SRS tax: {formatCurrency(result.totalTax)}</small><small>Gross withdrawals: {formatCurrency(result.gross)} · net: {formatCurrency(result.net)}</small></span></button>})}</div>
+      <div className="quiz-choice-grid quiz-choice-grid--two srs-strategy-grid">{[comparison.smooth,comparison.even].map(result=>{
+        const selected=inputs.srsWithdrawalStrategy===result.strategy;
+        const average=result.rows.length ? result.gross/result.rows.length : 0;
+        return <button type="button" key={result.strategy} className={`quiz-choice srs-strategy ${selected?'is-selected':''}`} aria-pressed={selected} onClick={()=>onChange({srsWithdrawalStrategy:result.strategy})}>
+          <span className="quiz-choice__check" aria-hidden="true">{selected ? <Check size={16} /> : null}</span>
+          <span><strong>{strategyTitle(result.strategy)}</strong><small className="srs-strategy__explanation">{strategyExplanation(result.strategy)}</small><small>First year: {formatCurrency(result.rows[0]?.withdrawal ?? 0)} · average: {formatCurrency(average)}/year</small><small>Total gross: {formatCurrency(result.gross)} · estimated tax: {formatCurrency(result.totalTax)} · net: {formatCurrency(result.net)}</small></span>
+        </button>;
+      })}</div>
+      <SrsSchedulePreview result={inputs.srsWithdrawalStrategy === "Tax Aware" ? comparison.smooth : comparison.even} />
       <p className="cpf-question-note">Lower estimated SRS tax among these two schedules: <strong>{comparison.recommended==='Tax Aware'?'Smooth taxable income':'Fixed initial tenth'}</strong>. This is not a global optimum or a product recommendation. Lower tax does not necessarily mean greater wealth. Compare net proceeds, timing, outside-account returns and spending needs.</p>
-      <p className="cpf-question-note">“Smooth” accounts for projected growth and other taxable income over ten years. “Fixed initial tenth” withdraws one-tenth of the initial balance annually, then clears the remainder in year ten. The annual model liquidates the remaining balance in the tenth modelled year and moves unused net proceeds to cash. Legally, the residual is deemed withdrawn after the exact ten-year window; assets need not always be sold. Life annuities are excluded. Exact dates and tax assessment timing need adviser review.</p>
+      <p className="cpf-question-note">The selected schedule is used in the retirement projection. The model moves unused net SRS proceeds to cash and clears the remaining balance in the tenth modelled year. Legally, the residual is deemed withdrawn after the exact ten-year window; assets need not always be sold. Life annuities are excluded. Exact dates and tax assessment timing need adviser review.</p>
       {safe.srsFirstWithdrawalAge+9>inputs.endAge ? <p className="cpf-input-warning">The main chart ends before your SRS window finishes. Extend the projection to age {safe.srsFirstWithdrawalAge+9} to see all withdrawals. The comparison above includes the full window.</p>:null}
     </> : null}
     <details className="cpf-help"><summary>SRS rules and tax assumptions</summary><p>Qualifying withdrawals are 50% taxable. Tax combines this portion with your other entered taxable income at current rates; tax is reserved in the same projected year. Citizenship controls the contribution cap, not tax residency. Withholding is not treated as an extra tax. No reliefs, rebates or contribution tax savings are credited. Early withdrawals, special concessions and SRS life annuities are outside this estimate.</p><a href="https://www.iras.gov.sg/taxes/individual-income-tax/basics-of-individual-income-tax/special-tax-schemes/tax-on-srs-withdrawals" target="_blank" rel="noreferrer">IRAS withdrawal rules</a>{' · '}<a href="https://www.mof.gov.sg/news-resources/supplementary-retirement-scheme/" target="_blank" rel="noreferrer">MOF SRS overview</a><p>Rules checked 8 September 2026. Future rules and returns may change.</p></details>

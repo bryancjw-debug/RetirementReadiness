@@ -10,6 +10,15 @@ import { createInitialOnboardingAnswers, onboardingAnswersToRetirementInputs } f
 const inputs = { ...defaultInputs, currentAge: 60, retirementAge: 65, endAge: 85, includeCpf: false, includeSrs: true, srsCurrentBalance: 400000, srsAnnualContribution: 0, srsReturnRate: 0, srsFirstWithdrawalAge: 65, retirementSpendingInflationRate: 0 };
 
 describe("SRS and household budgets", () => {
+  it("uses a moderate 3.5% SRS return for new plans", () => {
+    expect(defaultInputs.srsReturnRate).toBe(3.5);
+    expect(createDefaultHouseholdPlan().people.every((person) => person.inputs.srsReturnRate === 3.5)).toBe(true);
+    const legacy = sanitizeInputs({ ...defaultInputs, retirementAge: 62,
+      srsContributionEndAge: undefined as unknown as number,
+      srsReturnRate: undefined as unknown as number });
+    expect(legacy.srsContributionEndAge).toBe(62);
+    expect(legacy.srsReturnRate).toBe(3.5);
+  });
   it("uses illustrative couple budgets that differ from individual budgets", () => {
     for (const budget of lifestyleBudgets) { expect(budget.couple).toBeGreaterThan(budget.single); expect(budget.shares.reduce((a,b)=>a+b,0)).toBeCloseTo(1); }
   });

@@ -31,6 +31,8 @@ describe("BHS cohort and insurance budget safeguards", () => {
     expect(normalizeInsurance(legacy).privatePremiumMode).toBe("actual");
     expect(normalizeInsurance(legacy).cashPremiumsInSavings).toBe(false);
     expect(normalizeInsurance(undefined).cashPremiumsInSavings).toBe(true);
+    expect(normalizeInsurance(undefined).cashPremiumsInRetirementSpending).toBe(true);
+    expect(normalizeInsurance({ ...insuranceDefaults, cashPremiumsInRetirementSpending: false }).cashPremiumsInRetirementSpending).toBe(false);
   });
   it("does not deduct budgeted cash premiums twice before or after retirement", () => {
     const rows = projectRetirement(inputs).rows;

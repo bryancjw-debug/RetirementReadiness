@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { BadgeCheck, Calculator, Check, CircleAlert, Pencil, RotateCcw, Sparkles, Users } from "lucide-react";
+import { BadgeCheck, Calculator, CircleAlert, Pencil, RotateCcw, Sparkles, Users } from "lucide-react";
 import { cloneHouseholdPlan, createDefaultHouseholdPlan, type HouseholdPlan } from "../household";
 import { formatCurrency, formatPercent } from "../utils/formatters";
 import { projectHousehold } from "../utils/householdProjection";
@@ -9,6 +9,9 @@ import { HouseholdCpfCosts } from "./HouseholdCpfCosts";
 import { RateAssumptions } from "./RateAssumptions";
 import { ExcelDownload } from "./ExcelDownload";
 import { HouseholdSrsDetails } from "./HouseholdSrsDetails";
+import { ProjectionProcessing } from "./ProjectionProcessing";
+import { meaningfulChartItems } from "../utils/chartTooltip";
+import { projectionProcessingDuration } from "../utils/processing";
 
 type CoupleMode = "onboarding" | "processing" | "results" | "edit";
 type ChartView = "combined" | "person-1" | "person-2";
@@ -19,7 +22,8 @@ function Metric({ label, value, note, tone = "neutral" }: { label: string; value
 
 function HouseholdTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ dataKey: string; name: string; value: number; color: string }>; label?: number }) {
   if (!active || !payload?.length) return null;
-  return <div className="chart-tooltip"><strong>{label}</strong>{payload.map((item) => <div key={item.dataKey} style={{ color: item.color }}><span>{item.name}</span><b>{formatCurrency(Number(item.value))}</b></div>)}</div>;
+  const visibleItems = meaningfulChartItems(payload);
+  return <div className="chart-tooltip"><strong>{label}</strong>{visibleItems.length ? visibleItems.map((item) => <div key={item.dataKey} style={{ color: item.color }}><span>{item.name}</span><b>{formatCurrency(Number(item.value))}</b></div>) : <small>No amount in this category</small>}</div>;
 }
 
 function possessiveLabel(label: string) {
@@ -60,6 +64,7 @@ export function CouplePlanner({ onExit }: { onExit: () => void }) {
   const [showYears, setShowYears] = useState(false);
   const [chartView, setChartView] = useState<ChartView>("combined");
   const projection = useMemo(() => projectHousehold(plan), [plan]);
+  const processingDuration = useMemo(() => projectionProcessingDuration(plan.people.map((person) => person.inputs)), [plan.people]);
   const startRow = projection.rows.find((row) => row.calendarYear === projection.summary.retirementStartYear) ?? projection.rows[0];
   const transitionYears = Math.abs(
     (plan.people[0].inputs.retirementAge - plan.people[0].inputs.currentAge)
@@ -86,15 +91,6 @@ export function CouplePlanner({ onExit }: { onExit: () => void }) {
     shortfall: Math.round(row.shortfall)
   }));
 
-  useEffect(() => {
-    if (mode !== "processing") return undefined;
-    const timer = window.setTimeout(() => {
-      setMode("results");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }, 150);
-    return () => window.clearTimeout(timer);
-  }, [mode]);
-
   function complete(nextPlan: HouseholdPlan) {
     setPlan(cloneHouseholdPlan(nextPlan));
     setShowYears(false);
@@ -107,7 +103,10 @@ export function CouplePlanner({ onExit }: { onExit: () => void }) {
   }
 
   if (mode === "processing") {
-    return <section className="projection-processing" aria-live="polite"><div className="processing-orbit" aria-hidden="true"><Users size={24} /></div><p className="eyebrow">Building your household retirement picture</p><h2>Aligning two CPF and SRS journeys on one timeline…</h2><div className="processing-steps"><span><Check size={17} /> Projecting each person separately</span><span><Check size={17} /> Counting shared resources and spending once</span><span><Check size={17} /> Combining income only when it becomes available</span></div></section>;
+    return <ProjectionProcessing household duration={processingDuration} onComplete={() => {
+      setMode("results");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }} />;
   }
 
   const resultHeadline = projection.summary.status === "ready"

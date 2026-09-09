@@ -105,8 +105,8 @@ export function CpfExtrasQuiz({ value, onChange, section = "all" }: { value: Cpf
           <Choice selected={!insurance.cashPremiumsInSavings} onClick={() => updateInsurance({ cashPremiumsInSavings: false })}><strong>No, deduct premiums separately</strong></Choice>
         </div></fieldset>
         <fieldset className="cpf-question-group"><legend>Will retirement spending already include cash premiums?</legend><div className="quiz-choice-grid quiz-choice-grid--two">
-          <Choice selected={Boolean(insurance.cashPremiumsInRetirementSpending)} onClick={() => updateInsurance({ cashPremiumsInRetirementSpending: true })}><strong>Yes, included in my spending</strong></Choice>
-          <Choice selected={!insurance.cashPremiumsInRetirementSpending} onClick={() => updateInsurance({ cashPremiumsInRetirementSpending: false })}><strong>No, add them separately</strong></Choice>
+          <Choice selected={Boolean(insurance.cashPremiumsInRetirementSpending)} onClick={() => updateInsurance({ cashPremiumsInRetirementSpending: true })}><strong>Yes, included in my spending</strong><small>Selected by default to avoid counting the same premium twice</small></Choice>
+          <Choice selected={!insurance.cashPremiumsInRetirementSpending} onClick={() => updateInsurance({ cashPremiumsInRetirementSpending: false })}><strong>No, add them separately</strong><small>The model adds cash premiums above MediSave limits</small></Choice>
         </div></fieldset>
         <dl className="cpf-premium-preview" aria-live="polite"><div><dt>Modelled annual premiums now</dt><dd>{formatCurrency(preview.total)}</dd></div><div><dt>Eligible for MediSave</dt><dd>{formatCurrency(preview.medisaveEligible)}</dd></div><div><dt>Modelled cash above limits</dt><dd>{formatCurrency(preview.cashRequired)}</dd></div></dl>
         <p className="cpf-question-note">The budget choices cover ordinary cash premiums above withdrawal limits. If MediSave runs out, its unpaid portion is always an extra cash expense. No family support, subsidies, disability claims or premium waivers are assumed. This replaces any old flat MA-premium input.</p>

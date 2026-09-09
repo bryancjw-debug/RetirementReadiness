@@ -85,7 +85,7 @@ export const defaultInputs: RetirementInputs = {
   srsCurrentBalance: 0,
   srsAnnualContribution: 0,
   srsContributionEndAge: 65,
-  srsReturnRate: 2.5,
+  srsReturnRate: 3.5,
   srsFirstWithdrawalAge: 64
 };
 
@@ -622,7 +622,9 @@ export function sanitizeInputs(inputs: RetirementInputs): RetirementInputs {
     srsWithdrawalStrategy: inputs.srsWithdrawalStrategy ?? "Tax Aware",
     srsCurrentBalance: Math.min(500_000, clampNonNegative(inputs.srsCurrentBalance)),
     srsAnnualContribution: Math.min(clampNonNegative(inputs.srsAnnualContribution), srsContributionCap(inputs)),
-    srsContributionEndAge: Math.min(endAge, Math.max(currentAge, Math.floor(clampNonNegative(inputs.srsContributionEndAge)))),
+    srsContributionEndAge: Math.min(endAge, Math.max(currentAge, Math.floor(
+      Number.isFinite(inputs.srsContributionEndAge) ? inputs.srsContributionEndAge : retirementAge
+    ))),
     srsContributionStartAge: Math.max(currentAge, Math.floor(clampNonNegative(inputs.srsContributionStartAge ?? currentAge))),
     otherTaxableIncome: inputs.otherTaxableIncome ? {
       annualAmount: clampNonNegative(inputs.otherTaxableIncome.annualAmount),
@@ -630,7 +632,7 @@ export function sanitizeInputs(inputs: RetirementInputs): RetirementInputs {
       endAge: Math.max(retirementAge, Math.floor(clampNonNegative(inputs.otherTaxableIncome.endAge))),
       growthRate: Number.isFinite(inputs.otherTaxableIncome.growthRate) ? Math.max(-99, Math.min(100, inputs.otherTaxableIncome.growthRate)) : 0
     } : undefined,
-    srsReturnRate: Number.isFinite(inputs.srsReturnRate) ? Math.max(0, Math.min(25, inputs.srsReturnRate)) : 0,
+    srsReturnRate: Number.isFinite(inputs.srsReturnRate) ? Math.max(0, Math.min(25, inputs.srsReturnRate)) : defaultInputs.srsReturnRate,
     srsFirstWithdrawalAge: Math.min(
       Math.max(80, currentAge),
       Math.max(currentAge, srsPrescribedRetirementAge(inputs), Math.floor(clampNonNegative(inputs.srsFirstWithdrawalAge)))

@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import { BadgeCheck, Calculator, Check, CircleAlert, CircleHelp, Moon, Pencil, Plus, RotateCcw, ShieldCheck, Sparkles, Sun, Trash2 } from "lucide-react";
+import { BadgeCheck, Calculator, CircleAlert, CircleHelp, Moon, Pencil, Plus, RotateCcw, ShieldCheck, Sparkles, Sun, Trash2 } from "lucide-react";
 import { YearTable as ResponsiveYearTable } from "./components/YearTable";
 import { RateAssumptions } from "./components/RateAssumptions";
 import { SrsPlanner } from "./components/SrsPlanner";
@@ -20,6 +20,7 @@ import { OnboardingWizard } from "./components/OnboardingWizard";
 import { CouplePlanner } from "./components/CouplePlanner";
 import { CpfExtrasQuiz } from "./components/CpfExtrasQuiz";
 import { CpfPlanningPreview, MedisaveBalanceQuestion } from "./components/CpfPlanningPreview";
+import { ProjectionProcessing } from "./components/ProjectionProcessing";
 import {
   cpfContributionForYear,
   defaultInputs,
@@ -29,6 +30,8 @@ import {
 } from "./utils/projection";
 import { formatCurrency, formatNumber, formatPercent } from "./utils/formatters";
 import { buildRetirementFundingRows, convertFundingRowsToTodayDollars, type FundingValueMode } from "./utils/fundingChart";
+import { meaningfulChartItems } from "./utils/chartTooltip";
+import { projectionProcessingDuration } from "./utils/processing";
 import type { OnboardingAnswers } from "./onboarding";
 import type {
   CpfLifePlan,
@@ -303,15 +306,16 @@ function GapOptionCard({
 
 function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string | number }) {
   if (!active || !payload?.length) return null;
+  const visibleItems = meaningfulChartItems(payload);
   return (
     <div className="chart-tooltip">
       <strong>Age {label}</strong>
-      {payload.map((item) => (
+      {visibleItems.length ? visibleItems.map((item) => (
         <div key={item.dataKey} style={{ color: item.color }}>
           <span>{item.name}</span>
           <b>{formatCurrency(Number(item.value))}</b>
         </div>
-      ))}
+      )) : <small>No amount in this category</small>}
     </div>
   );
 }
@@ -375,6 +379,7 @@ export default function App() {
   const [experienceMode, setExperienceMode] = useState<ExperienceMode>("individual");
   const [onboardingAnswers, setOnboardingAnswers] = useState<OnboardingAnswers | null>(null);
   const projection = useMemo(() => projectRetirement(inputs), [inputs]);
+  const processingDuration = useMemo(() => projectionProcessingDuration(inputs), [inputs]);
   const cpfPreview = cpfContributionForYear(inputs, inputs.currentAge);
   const retirementRow = projection.rows.find((row) => row.age === inputs.retirementAge);
   const monthlyRetirementSpendingToday = annualToMonthly(inputs.retirementSpendingAnnual);
@@ -483,7 +488,15 @@ export default function App() {
   }, [cpfLifeBridgeYears, inputs, projection.rows, monthlyRetirementSpendingToday, projectedMonthlyRetirementSpending]);
 
   function updateInput<K extends keyof RetirementInputs>(key: K, value: RetirementInputs[K]) {
-    setInputs((current) => ({ ...current, [key]: value, ...(["currentInvestments", "preRetirementInvestmentReturnRate"].includes(key) ? { investmentMix: undefined } : {}), ...(["retirementReturnRate", "passiveIncomeYieldRate", "retirementIncomeMethod"].includes(key) ? { retirementInvestmentMix: undefined } : {}) }));
+    setInputs((current) => ({
+      ...current,
+      [key]: value,
+      ...(key === "retirementAge" && current.srsContributionEndAge === current.retirementAge
+        ? { srsContributionEndAge: Number(value) }
+        : {}),
+      ...(["currentInvestments", "preRetirementInvestmentReturnRate"].includes(key) ? { investmentMix: undefined } : {}),
+      ...(["retirementReturnRate", "passiveIncomeYieldRate", "retirementIncomeMethod"].includes(key) ? { retirementInvestmentMix: undefined } : {})
+    }));
     const reviewedBalance = key === "currentCashSavings" ? "Cash" : key === "currentInvestments" ? "Investments" : ["cpfOa", "cpfSa", "cpfRa", "cpfMa", "includeCpf"].includes(key) ? "Current CPF" : null;
     if (reviewedBalance) setOnboardingAnswers((current) => current ? { ...current, unknownBalances: current.unknownBalances?.filter((label) => label !== reviewedBalance) } : current);
   }
@@ -577,15 +590,6 @@ export default function App() {
     window.localStorage.setItem("retirement-readiness-theme", theme);
   }, [theme]);
 
-  useEffect(() => {
-    if (appMode !== "processing") return undefined;
-    const timer = window.setTimeout(() => {
-      setAppMode("results");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }, 150);
-    return () => window.clearTimeout(timer);
-  }, [appMode]);
-
   if (experienceMode === "couple") {
     return (
       <main className="app-shell app-shell--compact">
@@ -654,16 +658,10 @@ export default function App() {
       ) : null}
 
       {appMode === "processing" ? (
-        <section className="projection-processing" aria-live="polite" aria-label="Building your retirement projection">
-          <div className="processing-orbit" aria-hidden="true"><Sparkles size={24} /></div>
-          <p className="eyebrow">Building your retirement picture</p>
-          <h2>Turning your assumptions into a year-by-year projection…</h2>
-          <div className="processing-steps">
-            <span><Check size={17} /> Translating today’s lifestyle into future spending</span>
-            <span><Check size={17} /> Projecting your current resources</span>
-            <span><Check size={17} /> Comparing funding with retirement spending</span>
-          </div>
-        </section>
+        <ProjectionProcessing duration={processingDuration} onComplete={() => {
+          setAppMode("results");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }} />
       ) : null}
 
       {appMode === "edit" ? <>

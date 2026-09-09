@@ -2,7 +2,7 @@ import type { InsuranceEstimate, RetirementInputs } from "../types";
 
 export const insuranceDefaults: InsuranceEstimate = {
   privatePremiumMode: "allowance", cashPremiumsInSavings: true,
-  cashPremiumsInRetirementSpending: false,
+  cashPremiumsInRetirementSpending: true,
   enabled: false, hospitalCover: "medishield", privatePremiumAnnual: 600,
   premiumGrowthRate: 3, careShield: false, careShieldPremiumAnnual: 400,
   careShieldJoinAge: 30, careShieldGrowthRate: 4, supplement: false,
@@ -18,7 +18,7 @@ export function normalizeInsurance(value?: InsuranceEstimate): InsuranceEstimate
     // Older saved plans retain their explicit premiums and additive cash treatment.
     privatePremiumMode: value && !value.privatePremiumMode ? "actual" : v.privatePremiumMode,
     cashPremiumsInSavings: value ? Boolean(value.cashPremiumsInSavings) : true,
-    cashPremiumsInRetirementSpending: Boolean(v.cashPremiumsInRetirementSpending),
+    cashPremiumsInRetirementSpending: value?.cashPremiumsInRetirementSpending ?? true,
     enabled: Boolean(v.enabled), careShield: Boolean(v.careShield), supplement: Boolean(v.supplement),
     hospitalCover: ["none", "medishield", "integrated"].includes(v.hospitalCover) ? v.hospitalCover : "medishield",
     privatePremiumAnnual: positive(v.privatePremiumAnnual),

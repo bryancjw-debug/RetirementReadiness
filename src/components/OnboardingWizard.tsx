@@ -202,11 +202,27 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
       ...current,
       currentAge: value,
       retirementAge: Math.max(value + 1, current.retirementAge),
+      srsPlanning: (current.srsPlanning?.srsContributionEndAge ?? current.retirementAge) === current.retirementAge
+        ? { ...current.srsPlanning, srsContributionEndAge: Math.max(value + 1, current.retirementAge) }
+        : current.srsPlanning,
       cpfLifeStartAge: Math.max(current.cpfLifeStartAge, Math.min(70, value)),
       cpfOaHousingEndAge: Math.max(value, current.cpfOaHousingEndAge),
       cpfSa: value >= 55 ? 0 : current.cpfSa,
       cpfRa: value < 55 ? 0 : current.cpfRa
     }));
+  }
+
+  function updateRetirementAge(value: number) {
+    setAnswers((current) => {
+      const followsRetirement = (current.srsPlanning?.srsContributionEndAge ?? current.retirementAge) === current.retirementAge;
+      return {
+        ...current,
+        retirementAge: value,
+        srsPlanning: followsRetirement
+          ? { ...current.srsPlanning, srsContributionEndAge: value }
+          : current.srsPlanning
+      };
+    });
   }
 
   function chooseGuidedLifestyle(id: OnboardingAnswers["guidedLifestyle"], monthlyAmount: number) {
@@ -362,7 +378,7 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
             min={Math.min(answers.currentAge + 1, 79)}
             max={80}
             step={1}
-            onChange={(value) => update("retirementAge", value)}
+            onChange={updateRetirementAge}
             format={(value) => `Age ${value}`}
             quickValues={[55, 60, 65, 70].filter((age) => age > answers.currentAge)}
           />
@@ -392,8 +408,8 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
           {answers.spendingPath ? (
             <div className="quiz-subsection">
               <SliderQuestion
-                label="Monthly retirement spending in today’s dollars"
-                helper="An illustrative starting point only. You can refine the amount after seeing the result."
+                label="Adult household lifestyle budget in today’s dollars"
+                helper="This is the adult portion of the budget. Support for dependants who still rely on you at retirement is added below."
                 value={answers.monthlySpendingToday}
                 min={1_500}
                 max={12_000}
@@ -402,8 +418,13 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
                 format={(value) => `${formatCurrency(value)}/mo`}
                 quickValues={[2_500, 3_500, 5_500, 8_000]}
               />
+              <div className="retirement-spending-total" aria-live="polite">
+                <div><span>Adult lifestyle budget</span><strong>{formatCurrency(answers.monthlySpendingToday)}</strong></div>
+                <div><span>Dependant support at retirement</span><strong>+ {formatCurrency(dependantSpendingForYear(answers.spendingProfile, yearsUntilRetirement, 0) / 12)}</strong></div>
+                <div><span>Total monthly retirement spending in today’s dollars</span><strong>{formatCurrency(answers.monthlySpendingToday + dependantSpendingForYear(answers.spendingProfile, yearsUntilRetirement, 0) / 12)}</strong></div>
+              </div>
               <div className="future-value-reveal">
-                <div><span>Today’s monthly amount</span><strong>{formatCurrency(answers.monthlySpendingToday)}</strong></div>
+                <div><span>Total in today’s dollars</span><strong>{formatCurrency(answers.monthlySpendingToday + dependantSpendingForYear(answers.spendingProfile, yearsUntilRetirement, 0) / 12)}</strong></div>
                 <ArrowRight size={20} aria-hidden="true" />
                 <div><span>Estimated at age {answers.retirementAge}</span><strong>{formatCurrency(projectedMonthlySpending)}</strong></div>
               <p>Same intended lifestyle, expressed in future dollars using {answers.retirementSpendingInflationRate}% annual inflation.</p>

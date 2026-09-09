@@ -2,3 +2,6 @@ dist/
 node_modules/
 .vite/
 *.log
+.npm-cache/
+.playwright-cli/
+output/

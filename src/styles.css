@@ -2246,6 +2246,11 @@ footer svg {
   }
 }
 
+.chart-tooltip > small {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
 /* Release 2: focused household retirement planning */
 
 .welcome-actions .text-action {
@@ -3383,6 +3388,40 @@ footer svg {
   background: color-mix(in srgb, var(--primary) 7%, var(--surface-soft));
 }
 
+.retirement-spending-total {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+
+.retirement-spending-total > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.retirement-spending-total span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.retirement-spending-total > div:last-child {
+  margin-top: 2px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.retirement-spending-total > div:last-child span,
+.retirement-spending-total > div:last-child strong {
+  color: var(--text);
+  font-weight: 800;
+}
+
 .future-value-reveal div {
   display: grid;
   gap: 5px;
@@ -3469,6 +3508,28 @@ footer svg {
   text-align: center;
 }
 
+.processing-progress {
+  width: min(420px, 100%);
+  height: 7px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.processing-progress i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), var(--green));
+  animation: processing-progress linear forwards;
+}
+
+@keyframes processing-progress {
+  to { width: 100%; }
+}
+
 .processing-orbit {
   display: grid;
   width: 72px;
@@ -3501,7 +3562,94 @@ footer svg {
 }
 
 .processing-steps svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.processing-steps span.is-active {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.processing-steps span.is-active svg {
+  color: var(--primary);
+  animation: processing-spin 900ms linear infinite;
+}
+
+.processing-steps span.is-complete svg {
   color: var(--green);
+}
+
+@keyframes processing-spin {
+  to { transform: rotate(360deg); }
+}
+
+.srs-strategy__explanation {
+  line-height: 1.55;
+}
+
+.srs-schedule-preview {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+
+.srs-schedule-preview summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.srs-schedule-preview > p {
+  max-width: 78ch;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.srs-schedule-preview ol {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.srs-schedule-preview li {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.srs-schedule-preview__heading,
+.srs-schedule-preview__details {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.srs-schedule-preview__heading span,
+.srs-schedule-preview__details {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.srs-schedule-preview li > i {
+  display: block;
+  height: 5px;
+  margin: 10px 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.srs-schedule-preview li > i b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
 }
 
 .edit-mode-header {
@@ -3589,10 +3737,14 @@ footer svg {
 @media (prefers-reduced-motion: reduce) {
   .quiz-step,
   .processing-orbit,
+  .processing-progress i,
+  .processing-steps span.is-active svg,
   .quiz-progress__track i {
     animation: none;
     transition: none;
   }
+
+  .processing-progress i { width: 100%; }
 }
 
 @media (max-width: 900px) {
@@ -3676,6 +3828,18 @@ footer svg {
 
   .future-value-reveal > p {
     text-align: left;
+  }
+
+  .retirement-spending-total > div,
+  .srs-schedule-preview__heading,
+  .srs-schedule-preview__details {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .srs-schedule-preview ol {
+    grid-template-columns: 1fr;
   }
 
   .quick-values {
