@@ -12,11 +12,18 @@ describe("Excel projection snapshot", () => {
     const saved = await workbook.xlsx.writeBuffer();
     const reopened = new ExcelJS.Workbook();
     await reopened.xlsx.load(saved);
-    expect(reopened.worksheets).toHaveLength(6);
+    expect(reopened.worksheets).toHaveLength(7);
     const annual = reopened.getWorksheet("Annual Projection")!;
     const headers = annual.getRow(3).values as string[];
     expect(annual.getRow(4).getCell(headers.indexOf("Ending Investments")).value).toBeCloseTo(projection.rows[0].endingInvestments);
     expect(annual.views[0]).toMatchObject({ state: "frozen", ySplit: 3 });
+    const income = reopened.getWorksheet("Retirement Income")!;
+    const incomeHeaders = income.getRow(3).values as string[];
+    expect(incomeHeaders).toContain("Cash Interest Earned");
+    expect(incomeHeaders).toContain("Dividend And Portfolio Income");
+    const firstRetirementRow = projection.rows.find(row => row.phase === "retirement")!;
+    expect(income.getRow(4).getCell(incomeHeaders.indexOf("Cash Interest Earned")).value).toBeCloseTo(firstRetirementRow.savingsInterest);
+    expect(income.getRow(4).getCell(incomeHeaders.indexOf("Dividend And Portfolio Income")).value).toBeCloseTo(firstRetirementRow.passiveIncomeGenerated);
     const funding = reopened.getWorksheet("Spending Funding")!;
     const names = funding.getRow(3).values as string[];
     for (let index = 4; index <= funding.rowCount; index++) {

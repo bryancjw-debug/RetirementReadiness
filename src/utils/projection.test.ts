@@ -969,4 +969,25 @@ describe("projectRetirement", () => {
     expect(withLegacyHealthcare.summary.totalRetirementNeed).toBe(withoutHealthcare.summary.totalRetirementNeed);
     expect(withLegacyHealthcare.summary.totalHealthcareCosts).toBe(0);
   });
+
+  it("includes retirement one-time outflows in both readiness need and funding", () => {
+    const projection = projectRetirement({
+      ...defaultInputs,
+      currentAge: 64,
+      retirementAge: 65,
+      endAge: 65,
+      includeCpf: false,
+      currentCashSavings: 0,
+      currentInvestments: 0,
+      cashSavingsContribution: 0,
+      investmentContribution: 0,
+      retirementSpendingAnnual: 12_000,
+      retirementSpendingInflationRate: 0,
+      includeOneTimeEvents: true,
+      oneTimeEvents: [{ id: "expense", label: "Major expense", age: 65, amount: 8_000, direction: "outflow", certainty: "expected" }]
+    });
+
+    expect(projection.summary.totalRetirementNeed).toBe(20_000);
+    expect(projection.summary.totalFundedRetirementNeed + projection.summary.totalShortfall).toBeCloseTo(20_000, 5);
+  });
 });

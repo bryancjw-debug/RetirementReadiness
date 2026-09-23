@@ -72,6 +72,25 @@ export function buildProjectionWorkbook(data: ExportData, created = new Date()) 
   if (data.projection) {
     const rows = data.projection.rows;
     addSheet(workbook, "Annual Projection", rows, "Flows are annual SGD. Opening balances are start-of-year; ending balances and CPF/SRS balances are end-of-year. Year index 0 is the first modelled year. CPF MA and LIFE reserves are tracked resources, not spendable cash.");
+    addSheet(workbook, "Retirement Income", rows.filter(row => row.phase === "retirement").map(row => ({
+      age: row.age,
+      retirementSpendingNeeded: row.spendingNeed + row.oneTimeOutflow,
+      cashInterestEarned: row.savingsInterest,
+      dividendAndPortfolioIncome: row.passiveIncomeGenerated,
+      cpfLifeIncome: row.cpfLifeIncome,
+      customIncome: row.customIncomeGenerated,
+      otherTaxableIncomeBeforeTax: row.otherTaxableIncome ?? 0,
+      otherIncomeTax: row.otherIncomeTax ?? 0,
+      srsGrossWithdrawal: row.srsWithdrawal,
+      srsEstimatedTax: row.srsEstimatedTax,
+      srsNetWithdrawal: row.srsNetWithdrawal,
+      totalRetirementIncomeAvailable: row.passiveIncomeGenerated + row.cpfLifeIncome + row.customIncomeGenerated
+        + row.srsNetWithdrawal + (row.otherTaxableIncome ?? 0) - (row.otherIncomeTax ?? 0),
+      cashDrawdown: row.cashWithdrawal,
+      investmentDrawdown: row.investmentWithdrawal,
+      cpfOaSaDrawdown: row.cpfDrawdown,
+      unfundedShortfall: row.shortfall
+    })), "Annual future SGD during retirement. Cash interest is earned inside cash savings and remains in the cash balance; it is shown separately from dividends and portfolio distributions. Drawdowns are principal used after income is insufficient.");
     addSheet(workbook, "Spending Funding", buildRetirementFundingRows(rows), "Annual future SGD, matching the funding chart. CPF = eligible OA/SA drawdown. Funding sources plus shortfall equal spending. Surplus income is separate and is not added to spending funding. SRS gross, net and tax are information columns, not additional funding sources. Tax is reserved in the same modelled year.");
     addSheet(workbook, "CPF Details", rows.map(row => Object.fromEntries(Object.entries(row).filter(([key]) => /^(age|yearIndex|cpf|medisave|selectedCpf)/.test(key)))), "CPF balances and LIFE reserve are end-of-year; contributions, housing usage, medical premiums and drawdowns are annual SGD. The selected retirement sum is a target, not an extra balance. Interest is embedded in balances; separate interest amounts are not exposed by this model.");
     addSheet(workbook, "Income and Events", rows.map(row => Object.fromEntries(Object.entries(row).filter(([key]) => /^(age|yearIndex|srs|oneTime|lumpSum|custom|passive|cpfLifeIncome|activeIncome|other|totalIncomeTax|dependant)/.test(key)))), "Annual future SGD. SRS balance is the end-of-year balance. SRS net withdrawals and transfer-to-cash describe related movements and must not be counted as two income streams. Event and income inputs are in Inputs and Assumptions.");

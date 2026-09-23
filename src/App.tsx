@@ -320,6 +320,27 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
   );
 }
 
+function FundingChartTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string | number }) {
+  if (!active || !payload?.length) return null;
+  const spending = Number(payload[0]?.payload?.spending ?? 0);
+  const visibleItems = meaningfulChartItems(payload);
+  return (
+    <div className="chart-tooltip chart-tooltip--funding">
+      <strong>Age {label}</strong>
+      <div className="chart-tooltip__total">
+        <span>Total retirement spending needed</span>
+        <b>{formatCurrency(spending)}</b>
+      </div>
+      {visibleItems.length ? visibleItems.map((item) => (
+        <div key={item.dataKey} style={{ color: item.color }}>
+          <span>{item.name}</span>
+          <b>{formatCurrency(Number(item.value))}</b>
+        </div>
+      )) : <small>No funding source used in this year</small>}
+    </div>
+  );
+}
+
 function ChartLegend({ items }: { items: { label: string; className: string }[] }) {
   return (
     <div className="chart-legend">
@@ -1157,8 +1178,8 @@ export default function App() {
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={chartRows} margin={{ top: 12, right: 20, left: 4, bottom: 8 }}>
                     <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
-                    <XAxis dataKey="age" tickLine={false} axisLine={false} />
-                    <YAxis tickFormatter={(value) => formatCurrency(Number(value), { compact: true })} tickLine={false} axisLine={false} />
+                    <XAxis dataKey="age" tick={{ fill: "var(--chart-axis-text)" }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fill: "var(--chart-axis-text)" }} tickFormatter={(value) => formatCurrency(Number(value), { compact: true })} tickLine={false} axisLine={false} />
                     <Tooltip content={<ChartTooltip />} />
                     <Area dataKey="cash" name="Cash Savings" type="monotone" stackId="wealth" stroke="var(--chart-cash)" fill="var(--chart-cash)" fillOpacity={0.62} />
                     <Area dataKey="investments" name="Investments" type="monotone" stackId="wealth" stroke="var(--chart-investments)" fill="var(--chart-investments)" fillOpacity={0.62} />
@@ -1210,9 +1231,9 @@ export default function App() {
                     }}
                   >
                     <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
-                    <XAxis dataKey="age" tickLine={false} axisLine={false} />
-                    <YAxis tickFormatter={(value) => formatCurrency(Number(value), { compact: true })} tickLine={false} axisLine={false} />
-                    <Tooltip content={<ChartTooltip />} />
+                    <XAxis dataKey="age" tick={{ fill: "var(--chart-axis-text)" }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fill: "var(--chart-axis-text)" }} tickFormatter={(value) => formatCurrency(Number(value), { compact: true })} tickLine={false} axisLine={false} />
+                    <Tooltip content={<FundingChartTooltip />} />
                     <Bar dataKey="cpfLife" name="CPF LIFE Income" stackId="funding" fill="var(--chart-primary)" />
                     <Bar dataKey="dividends" name="Dividends / Passive Income" stackId="funding" fill="var(--chart-success)" />
                     <Bar dataKey="customIncome" name="Custom Income" stackId="funding" fill="var(--chart-custom-income)" />

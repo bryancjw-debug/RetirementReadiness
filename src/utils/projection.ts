@@ -1098,7 +1098,10 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
   const totalSrsNetWithdrawals = rows.reduce((sum, row) => sum + row.srsNetWithdrawal, 0);
   const totalHealthcareCosts = rows.reduce((sum, row) => sum + row.healthcareCost, 0);
   const totalShortfall = rows.reduce((sum, row) => sum + row.shortfall, 0);
-  const totalRetirementNeed = rows.reduce((sum, row) => sum + row.spendingNeed, 0);
+  const totalRetirementNeed = rows.reduce(
+    (sum, row) => sum + (row.phase === "retirement" ? row.spendingNeed + row.oneTimeOutflow : 0),
+    0
+  );
   const totalFundedRetirementNeed = Math.max(0, totalRetirementNeed - totalShortfall);
   const readinessPercent = totalRetirementNeed > 0
     ? Math.min(100, (totalFundedRetirementNeed / totalRetirementNeed) * 100)
