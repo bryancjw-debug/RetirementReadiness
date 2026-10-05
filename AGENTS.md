@@ -1,5 +1,15 @@
 # RetirementReadiness
 
+## User Preferences and Step Motion (6 October 2026)
+
+- Keep the beginner-friendly guided questionnaire, individual/couple ownership, optional details and detailed results. Preserve entered data and all financial logic during visual work.
+- Keep the approved Ink & Cobalt theme and consistent cash/investment/CPF colours. Aim for simple Apple-like clarity and Samsung-like polish, with readable controls for older users and mobile-first layouts.
+- Approved motion (6 October 2026): Next moves the current question upward while the next rises from below. Back reverses the direction. Use the approved gentle-drift motion for individual and couple questions, including CPF substeps and step navigation buttons.
+- The 6 October preview is `C:/Users/Bryan/Documents/Codex/2026-04-26/build-a-polished-interactive-financial-projection/output/step-transition-preview/index.html` and is not production app code.
+- Motion lasts 1100ms with smooth easing, 80px maximum vertical travel and a staggered fade; no bounce or zoom. Keep chapter navigation, progress and floating result summary stationary. Cancel unfinished motion on rapid navigation/unmount; outgoing visual copies must be inert, hidden from accessibility and free of duplicate IDs.
+- Do not replay transitions for value edits, projections, theme changes or chart interactions. Preserve form state, validation and focus; restore the next question's top and focus its heading without a competing smooth scroll.
+- Respect reduced-motion preferences with no travelling transition or smooth navigation scroll. Verify individual/couple flows, CPF subsections, variable content height, rapid navigation, mobile keyboard, focus, both themes and overflow before release.
+
 ## Household budgets and SRS (September 2026)
 
 - Lifestyle samples are planner-designed illustrations informed by SingStat HES 2023, never official recommended budgets. Its $5,931 all-household and $2,349 solely non-employed age-65-plus household averages describe different populations. Keep the source and category explanation in a tap-to-open dialog. Preserve custom spending when household composition changes.
