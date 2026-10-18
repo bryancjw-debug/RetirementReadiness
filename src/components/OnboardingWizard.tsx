@@ -339,7 +339,7 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
       </section>
     ) : (
     <section className="onboarding-card" data-phase={chapter} aria-label="Guided retirement setup">
-      <QuizProgress chapter={chapter} detail={step === 5 && answers.includeCpf ? `${cpfParts[cpfPart]} (${cpfPart + 1} of 4)` : stepLabels[step]} />
+      <QuizProgress chapter={chapter} detail={step === 5 && answers.includeCpf ? `${cpfParts[cpfPart]} (${cpfPart + 1} of 4)` : stepLabels[step]} steps={stepLabels} currentStep={step} onNavigate={jumpTo} />
 
       {step === 0 ? (
         <QuestionStep eyebrow="About you" title="Let’s begin with where you are today." intro="Your age determines how many years your resources may have to grow. A name is optional and is used only to personalise this experience.">
@@ -732,8 +732,9 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
         </QuestionStep>
       ) : null}
 
+      {step === 6 ? <button className="text-action" type="button" onClick={() => { update("includeOneTimeEvents", false); update("includeOtherIncome", false); jumpTo(7); }}>Skip optional events & income</button> : null}
       <div className="quiz-navigation">
-        {step === 6 ? <button className="text-action" type="button" onClick={() => { update("includeOneTimeEvents", false); update("includeOtherIncome", false); jumpTo(7); }}>Skip optional events & income</button> : null}
+        <button className="secondary-action mobile-section-action" type="button" aria-controls="quiz-sections-menu" onClick={() => { const summary = document.querySelector<HTMLElement>(".section-menu summary"); summary?.click(); summary?.focus({ preventScroll: true }); }}>Sections</button>
         <button className="secondary-action" type="button" onClick={back}><ArrowLeft size={18} /> Back</button>
         <button className="primary-action" type="button" disabled={!canContinue} onClick={next}>
           {step === stepLabels.length - 1 ? "Build my projection" : "Continue"} <ArrowRight size={18} />

@@ -4,7 +4,8 @@ export function useQuizTransition(position: number, enabled = true) {
   const previous = useRef<{ position: number; enabled: boolean; snapshots: HTMLElement[] } | null>(null);
   const cleanup = useRef<() => void>(() => {});
   useLayoutEffect(() => {
-    const elements = Array.from(document.querySelectorAll<HTMLElement>(".quiz-step:not([data-motion-ghost]), .quiz-navigation:not([data-motion-ghost])"));
+    const selector = ".quiz-step:not([data-motion-ghost]), [data-step-summary]:not([data-motion-ghost])" + (window.innerWidth > 1000 ? ", .quiz-navigation:not([data-motion-ghost])" : "");
+    const elements = Array.from(document.querySelectorAll<HTMLElement>(selector));
     const last = previous.current;
     const changed = last?.position !== position;
     if (changed) cleanup.current();

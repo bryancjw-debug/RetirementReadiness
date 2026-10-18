@@ -1,12 +1,21 @@
 # RetirementReadiness
 
+## Minimal Workspace and PWA (18 October 2026)
+
+- Use flat system-font surfaces, thin borders, restrained 6-8px corners and no raised-card shadows or hover lifts. Keep Ink & Cobalt/category colours, financial logic and the approved step transition. `src/workspace.css` owns layout/presentation overrides; `src/theme.css` remains the palette source.
+- Use available desktop width with a compact left sidebar. Questionnaire links revisit completed sections without bypassing first-run validation; results/edit screens have heading-based section navigation. Mobile menus start collapsed and do not reserve sidebar width.
+- Public manifest, install help, icons and worker template live in `public`. `npm run build` hashes the built app shell and generates `dist/sw.js` using `scripts/build-pwa.mjs`. Never deploy the unprocessed worker template.
+- Cache only app-shell resources under this app's scope. Keep its namespace separate from CommonCents and never delete unrelated caches. Prompt before applying updates; never reload an unfinished quiz automatically. Installation is not a data backup; offline calculations use the last downloaded app version.
+- Check production assets at a subpath, offline reopen/navigation, manifests/icons, cache isolation and light/dark responsive layouts. Native Android/Windows/iOS installation needs device verification; iOS uses Add to Home Screen rather than a Chromium install prompt.
+
 ## User Preferences and Step Motion (6 October 2026)
 
 - Keep the beginner-friendly guided questionnaire, individual/couple ownership, optional details and detailed results. Preserve entered data and all financial logic during visual work.
 - Keep the approved Ink & Cobalt theme and consistent cash/investment/CPF colours. Aim for simple Apple-like clarity and Samsung-like polish, with readable controls for older users and mobile-first layouts.
 - Approved motion (6 October 2026): Next moves the current question upward while the next rises from below. Back reverses the direction. Use the approved gentle-drift motion for individual and couple questions, including CPF substeps and step navigation buttons.
 - The 6 October preview is `C:/Users/Bryan/Documents/Codex/2026-04-26/build-a-polished-interactive-financial-projection/output/step-transition-preview/index.html` and is not production app code.
-- Motion lasts 1100ms with smooth easing, 80px maximum vertical travel and a staggered fade; no bounce or zoom. Keep chapter navigation, progress and floating result summary stationary. Cancel unfinished motion on rapid navigation/unmount; outgoing visual copies must be inert, hidden from accessibility and free of duplicate IDs.
+- Motion lasts 1100ms with smooth easing, 80px maximum vertical travel and a staggered fade; no bounce or zoom. Move any docked step summary with the form (`data-step-summary` for detached summaries). Keep chapter navigation, progress, floating global result summaries and mobile bottom actions stationary. Cancel unfinished motion on rapid navigation/unmount; outgoing visual copies must be inert, hidden from accessibility and free of duplicate IDs.
+- Mobile uses Back / Sections / Next with a section sheet and Escape-to-close/focus restoration. Keep at least 110px bottom content reserve even below 600px. Never bypass unanswered-step validation through navigation. Avoid backdrop-filter/transform ancestors around fixed controls.
 - Do not replay transitions for value edits, projections, theme changes or chart interactions. Preserve form state, validation and focus; restore the next question's top and focus its heading without a competing smooth scroll.
 - Respect reduced-motion preferences with no travelling transition or smooth navigation scroll. Verify individual/couple flows, CPF subsections, variable content height, rapid navigation, mobile keyboard, focus, both themes and overflow before release.
 
@@ -26,7 +35,7 @@
 - Relevant official sources: https://www.singstat.gov.sg/publications/households/household-expenditure-survey ; https://www.iras.gov.sg/taxes/individual-income-tax/basics-of-individual-income-tax/special-tax-schemes/tax-on-srs-withdrawals ; https://www.mof.gov.sg/news-resources/supplementary-retirement-scheme/ . Rules checked 8 September 2026.
 
 - This is the standalone RetirementReadiness repo, not Common Cents. Verify root, branch, remote and working tree before changes.
-- Approved visual direction (8 September 2026): Ink & Cobalt, option C. Shared theme tokens live in `src/theme.css`, imported last in `src/main.tsx`.
+- Approved visual direction (8 September 2026): Ink & Cobalt, option C. Shared palette tokens live in `src/theme.css`; `src/workspace.css` supplies the later minimal-layout overrides without replacing the palette.
 - Light: neutral #f2f3f5 background, white surfaces, #20242b text, cobalt #2d58b5 actions, visible borders. Dark: #161719 background, #232529 surfaces, #8aafff cobalt actions with dark text.
 - Cash uses neutral blue-grey; investments use cobalt; assumptions use restrained gold. CPF and chart series remain distinct. Red denotes deficits/errors, green denotes funded/surplus states, not guaranteed investment outcomes.
 - Use category-coloured headers in dark mode and lighter category headers with clear card boundaries in light mode. Inputs remain neutral. Use the shared `QuizNumberQuestion` category prop, not label-text matching.

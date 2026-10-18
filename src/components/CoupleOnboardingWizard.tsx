@@ -205,7 +205,7 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
 
   return (
     <section className="onboarding-card couple-onboarding" data-phase={step <= 2 ? 0 : step === 3 ? 1 : step === 4 ? 2 : step <= 7 ? 3 : 4} aria-label="Guided couple retirement setup">
-      <QuizProgress chapter={step <= 2 ? 0 : step === 3 ? 1 : step === 4 ? 2 : step <= 7 ? 3 : 4} detail={step === 4 ? `${person.label}: ${cpfParts[cpfPart]} (${cpfPart + 1} of 4)` : stepLabels[step]} />
+      <QuizProgress chapter={step <= 2 ? 0 : step === 3 ? 1 : step === 4 ? 2 : step <= 7 ? 3 : 4} detail={step === 4 ? `${person.label}: ${cpfParts[cpfPart]} (${cpfPart + 1} of 4)` : stepLabels[step]} steps={stepLabels} currentStep={step} onNavigate={index => { setStep(index); setCpfPart(0); setActivePerson(0); }} />
 
       {step === 0 ? <Step eyebrow="Planning together" title="Let’s place both of you on the same timeline." intro="Each person keeps a separate CPF and SRS journey. Names are optional and stay in this browser.">
         <div className="couple-person-grid">
@@ -371,7 +371,7 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
       {!editMode ? <QuizDraftControls storageKey="couple" value={draft}
         validate={(value): value is typeof draft => matchesQuizShape(value, draft) && (value as typeof draft).plan.people.length === 2 && [0, 1].includes((value as typeof draft).activePerson) && Number.isInteger((value as typeof draft).step) && (value as typeof draft).step >= 0 && (value as typeof draft).step < 9 && Number.isInteger((value as typeof draft).cpfPart) && (value as typeof draft).cpfPart >= 0 && (value as typeof draft).cpfPart < 4}
         onResume={(value) => { setPlan(value.plan); setStep(value.step); setActivePerson(value.activePerson); setRefineAdvanced(value.refineAdvanced); setRefineSrs(value.refineSrs); setAddCpfBalances(value.addCpfBalances); setRefineCpf(value.refineCpf); setCpfPart(value.cpfPart); setResourcesConfirmed(value.resourcesConfirmed); }} /> : null}
-      <div className="quiz-navigation"><button className="secondary-action" type="button" onClick={back}><ArrowLeft size={18} /> {step === 0 && editMode ? "Cancel" : "Back"}</button><button className="primary-action" type="button" disabled={!canContinue} onClick={next}>{step === stepLabels.length - 1 ? (editMode ? "Update household result" : "Build our projection") : "Continue"} <ArrowRight size={18} /></button></div>
+      <div className="quiz-navigation"><button className="secondary-action mobile-section-action" type="button" aria-controls="quiz-sections-menu" onClick={() => { const summary = document.querySelector<HTMLElement>(".section-menu summary"); summary?.click(); summary?.focus({ preventScroll: true }); }}>Sections</button><button className="secondary-action" type="button" onClick={back}><ArrowLeft size={18} /> {step === 0 && editMode ? "Cancel" : "Back"}</button><button className="primary-action" type="button" disabled={!canContinue} onClick={next}>{step === stepLabels.length - 1 ? (editMode ? "Update household result" : "Build our projection") : "Continue"} <ArrowRight size={18} /></button></div>
     </section>
   );
 }
