@@ -339,7 +339,7 @@ export function OnboardingWizard({ initialInputs, onComplete, onExploreSample, o
       </section>
     ) : (
     <section className="onboarding-card" data-phase={chapter} aria-label="Guided retirement setup">
-      <QuizProgress chapter={chapter} detail={step === 5 && answers.includeCpf ? `${cpfParts[cpfPart]} (${cpfPart + 1} of 4)` : stepLabels[step]} steps={stepLabels} currentStep={step} onNavigate={jumpTo} />
+      <QuizProgress detail={step === 5 && answers.includeCpf ? `${cpfParts[cpfPart]} (${cpfPart + 1} of 4)` : stepLabels[step]} steps={stepLabels} currentStep={step} onNavigate={jumpTo} />
 
       {step === 0 ? (
         <QuestionStep eyebrow="About you" title="Let’s begin with where you are today." intro="Your age determines how many years your resources may have to grow. A name is optional and is used only to personalise this experience.">

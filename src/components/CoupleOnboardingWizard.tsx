@@ -205,7 +205,7 @@ export function CoupleOnboardingWizard({ initialPlan, editMode = false, onComple
 
   return (
     <section className="onboarding-card couple-onboarding" data-phase={step <= 2 ? 0 : step === 3 ? 1 : step === 4 ? 2 : step <= 7 ? 3 : 4} aria-label="Guided couple retirement setup">
-      <QuizProgress chapter={step <= 2 ? 0 : step === 3 ? 1 : step === 4 ? 2 : step <= 7 ? 3 : 4} detail={step === 4 ? `${person.label}: ${cpfParts[cpfPart]} (${cpfPart + 1} of 4)` : stepLabels[step]} steps={stepLabels} currentStep={step} onNavigate={index => { setStep(index); setCpfPart(0); setActivePerson(0); }} />
+      <QuizProgress detail={step === 4 ? `${person.label}: ${cpfParts[cpfPart]} (${cpfPart + 1} of 4)` : stepLabels[step]} steps={stepLabels} currentStep={step} onNavigate={index => { setStep(index); setCpfPart(0); setActivePerson(0); }} />
 
       {step === 0 ? <Step eyebrow="Planning together" title="Let’s place both of you on the same timeline." intro="Each person keeps a separate CPF and SRS journey. Names are optional and stay in this browser.">
         <div className="couple-person-grid">
