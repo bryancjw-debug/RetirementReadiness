@@ -1,6 +1,6 @@
-const CACHE = "retirementreadiness-shell-8f36884cb260";
+const CACHE = "retirementreadiness-shell-b04c184830f7";
 const PREFIX = "retirementreadiness-shell-";
-const SHELL = ["./assets/charts-EJ_F0YH-.js","./assets/excelExport-CeNI3SZv.js","./assets/index-BuJZ27uM.css","./assets/index-CEmMTbso.js","./assets/singapore-retirement-lifestyle-hero-DeLDF0JQ.jpg","./assets/singapore-waterfront-maltipoos-04O35OrO.webp","./icons/apple-touch-icon.png","./icons/icon-192.png","./icons/icon-512.png","./icons/maskable-512.png","./index.html","./manifest.webmanifest","./pwa.css","./pwa.js"];
+const SHELL = ["./assets/charts-EJ_F0YH-.js","./assets/excelExport-RL6bEgrT.js","./assets/index-COdXIuSO.js","./assets/index-CcwJB_en.css","./assets/singapore-retirement-lifestyle-hero-DeLDF0JQ.jpg","./assets/singapore-waterfront-maltipoos-04O35OrO.webp","./icons/apple-touch-icon.png","./icons/icon-192.png","./icons/icon-512.png","./icons/maskable-512.png","./index.html","./manifest.webmanifest","./pwa.css","./pwa.js"];
 const allowed = new Set(SHELL.map(path => new URL(path, self.registration.scope).href));
 self.addEventListener("install", event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL.map(path => new Request(new URL(path, self.registration.scope).href, { cache: "reload" }))))));
 self.addEventListener("activate", event => event.waitUntil((async () => {
