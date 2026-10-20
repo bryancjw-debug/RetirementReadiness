@@ -11,7 +11,8 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import { BadgeCheck, Calculator, CircleAlert, CircleHelp, Moon, Pencil, Plus, RotateCcw, ShieldCheck, Sparkles, Sun, Trash2 } from "lucide-react";
+import { BadgeCheck, Calculator, CircleAlert, CircleHelp, Home, Moon, Pencil, Plus, RotateCcw, ShieldCheck, Sparkles, Sun, Trash2 } from "lucide-react";
+import { RetirementWelcome } from "./components/RetirementWelcome";
 import { YearTable as ResponsiveYearTable } from "./components/YearTable";
 import { RateAssumptions } from "./components/RateAssumptions";
 import { SrsPlanner } from "./components/SrsPlanner";
@@ -389,6 +390,21 @@ function createOneTimeEvent(inputs: RetirementInputs): OneTimeFinancialEvent {
 }
 
 export default function App() {
+  const [showHome, setShowHome] = useState(false);
+  const homeReturn = useRef<{ scroll: number; focus: HTMLElement | null }>({ scroll: 0, focus: null });
+  function goHome() {
+    homeReturn.current = { scroll: window.scrollY, focus: document.activeElement as HTMLElement | null };
+    setShowHome(true);
+  }
+  function resumeFromHome() {
+    setShowHome(false);
+    requestAnimationFrame(() => { window.scrollTo({ top: homeReturn.current.scroll, behavior: "instant" }); homeReturn.current.focus?.focus({ preventScroll: true }); });
+  }
+  useEffect(() => {
+    if (!showHome) return;
+    window.scrollTo({ top: 0, behavior: "instant" });
+    document.querySelector<HTMLElement>("[data-home-screen] #welcome-title")?.focus({ preventScroll: true });
+  }, [showHome]);
   const [inputs, setInputs] = useState<RetirementInputs>(defaultInputs);
   const [showTable, setShowTable] = useState(false);
   const [fundingValueMode, setFundingValueMode] = useState<FundingValueMode>("future");
@@ -611,9 +627,14 @@ export default function App() {
     window.localStorage.setItem("retirement-readiness-theme", theme);
   }, [theme]);
 
+  const homeScreen = showHome ? <main className="app-shell app-shell--landing" data-home-screen>
+    <section className="hero"><h1>Retirement<wbr />Readiness</h1><button className="theme-toggle" type="button" onClick={() => setTheme(current => current === "dark" ? "light" : "dark")} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>{theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}{theme === "dark" ? "Light" : "Dark"}</button></section>
+    <RetirementWelcome resume onStart={resumeFromHome} />
+  </main> : null;
+
   if (experienceMode === "couple") {
     return (
-      <main className="app-shell app-shell--compact">
+      <>{homeScreen}<main className="app-shell app-shell--compact" hidden={showHome}>
         <section className="hero">
           <div>
             <p className="eyebrow">Simple Singapore Retirement Checkup</p>
@@ -621,6 +642,7 @@ export default function App() {
             <p>Bring two individual CPF and SRS journeys into one clear household retirement picture.</p>
           </div>
           <div className="hero-actions">
+            <button className="secondary-action" type="button" onClick={goHome} title="Home"><Home size={18} /> Home</button>
             <button className="theme-toggle" type="button" onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>
               {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
               {theme === "dark" ? "Light" : "Dark"}
@@ -635,12 +657,12 @@ export default function App() {
           setAppMode("onboarding");
           window.scrollTo({ top: 0, behavior: "smooth" });
         }} />
-      </main>
+      </main></>
     );
   }
 
   return (
-    <main className={`app-shell ${quizActive || appMode !== "onboarding" ? "app-shell--compact" : "app-shell--landing"}`}>
+    <>{homeScreen}<main hidden={showHome} className={`app-shell ${quizActive || appMode !== "onboarding" ? "app-shell--compact" : "app-shell--landing"}`}>
       <section className="hero">
         <div>
           {quizActive || appMode !== "onboarding" ? <p className="eyebrow">Simple Singapore Retirement Checkup</p> : null}
@@ -654,6 +676,7 @@ export default function App() {
           </p> : null}
         </div>
         <div className="hero-actions">
+          {quizActive || appMode !== "onboarding" ? <button className="secondary-action" type="button" onClick={goHome} title="Home"><Home size={18} /> Home</button> : null}
           <button
             className="theme-toggle"
             type="button"
@@ -1415,6 +1438,6 @@ export default function App() {
         <ShieldCheck size={18} />
         <span>This educational projection uses assumptions and estimates. It does not recommend financial products. Confirm personalised CPF LIFE payouts with CPF Board's official estimator.</span>
       </footer>
-    </main>
+    </main></>
   );
 }

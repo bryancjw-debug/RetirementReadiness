@@ -14,7 +14,7 @@ export function ResultNavigation() {
     let timer: ReturnType<typeof setTimeout>;
     const scan = () => {
       const headings = Array.from(document.querySelectorAll<HTMLElement>(".results-section h2, .results-section h3, .page-grid--edit h2"))
-        .filter(heading => !heading.closest("details:not([open])"));
+        .filter(heading => !heading.closest("details:not([open]), [hidden]"));
       const next = headings.slice(0, 14).map((heading, index) => {
         heading.id ||= `workspace-section-${index}`;
         return { id: heading.id, label: heading.textContent || "Section" };

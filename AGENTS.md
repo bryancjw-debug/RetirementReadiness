@@ -3,6 +3,7 @@
 ## Minimal Workspace and PWA (18 October 2026)
 
 - Use flat system-font surfaces, thin borders, restrained 6-8px corners and no raised-card shadows or hover lifts. Keep Ink & Cobalt/category colours, financial logic and the approved step transition. `src/workspace.css` owns layout/presentation overrides; `src/theme.css` remains the palette source.
+- Home must preserve the mounted individual/couple questionnaire or result, including its current step and answers. `RetirementWelcome` is shared by the original welcome and return-Home screen. Hide the underlying main and results navigation accessibly; do not reset state or start over on Home. Resume restores the previous view and focus.
 - Use available desktop width with a compact left sidebar. Questionnaire links revisit completed sections without bypassing first-run validation; results/edit screens have heading-based section navigation. Mobile menus start collapsed and do not reserve sidebar width.
 - Use one shared bordered questionnaire frame with an in-flow sticky sidebar, not a fixed rail outside the frame. Progress reads Section X of the actual section count in each individual/couple flow; keep CPF substeps separate and omit the old five-chapter count and editing footnote. Desktop hides the mobile Sections action. Keep PWA tools in document flow.
 - Public manifest, install help, icons and worker template live in `public`. `npm run build` hashes the built app shell and generates `dist/sw.js` using `scripts/build-pwa.mjs`. Never deploy the unprocessed worker template.
