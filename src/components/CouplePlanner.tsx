@@ -4,6 +4,7 @@ import { BadgeCheck, Calculator, CircleAlert, Pencil, RotateCcw, Sparkles, Users
 import { cloneHouseholdPlan, createDefaultHouseholdPlan, type HouseholdPlan } from "../household";
 import { formatCurrency, formatPercent } from "../utils/formatters";
 import { projectHousehold } from "../utils/householdProjection";
+import { SpendingRoom } from "./SpendingRoom";
 import { CoupleOnboardingWizard } from "./CoupleOnboardingWizard";
 import { HouseholdCpfCosts } from "./HouseholdCpfCosts";
 import { RateAssumptions } from "./RateAssumptions";
@@ -64,6 +65,7 @@ export function CouplePlanner({ onExit }: { onExit: () => void }) {
   const [showYears, setShowYears] = useState(false);
   const [chartView, setChartView] = useState<ChartView>("combined");
   const projection = useMemo(() => projectHousehold(plan), [plan]);
+  const roomPlan = useMemo(() => ({ household: plan }), [plan]);
   const processingDuration = useMemo(() => projectionProcessingDuration(plan.people.map((person) => person.inputs)), [plan.people]);
   const startRow = projection.rows.find((row) => row.calendarYear === projection.summary.retirementStartYear) ?? projection.rows[0];
   const transitionYears = Math.abs(
@@ -209,6 +211,7 @@ export function CouplePlanner({ onExit }: { onExit: () => void }) {
         </article>
       </div>
 
+      {projection.summary.status === "ready" && <SpendingRoom plan={roomPlan}/>}
       <div className="metric-grid">
         <Metric label="Estimated need funded" value={formatPercent(projection.summary.readinessPercent)} note="Across the household projection" tone={projection.summary.status === "ready" ? "good" : "warn"} />
         <Metric label="Projected funding lasts" value={`Through ${projection.summary.runwayYear}`} note={projection.summary.status === "ready" ? "No unfunded year in this scenario" : "First shortfall may follow"} tone={projection.summary.status === "ready" ? "good" : "warn"} />

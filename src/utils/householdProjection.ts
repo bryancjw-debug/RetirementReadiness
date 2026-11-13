@@ -1,4 +1,5 @@
 import type { RetirementInputs } from "../types";
+import { scenarioBudget, type SpendingScenario } from "./spendingScenario";
 import type { HouseholdPersonPlan, HouseholdPlan } from "../household";
 import {
   accrueLockedSaInterest,
@@ -224,7 +225,7 @@ function drawCpf(people: HouseholdPersonPlan[], states: PersonState[], ages: num
   return { total: draws[0] + draws[1], byPerson: draws as [number, number] };
 }
 
-export function projectHousehold(rawPlan: HouseholdPlan): HouseholdProjection {
+export function projectHousehold(rawPlan: HouseholdPlan, scenario?: SpendingScenario): HouseholdProjection {
   const plan: HouseholdPlan = {
     ...rawPlan,
     people: rawPlan.people.map((person) => ({ ...person, inputs: sanitizeInputs(person.inputs) })) as HouseholdPlan["people"]
@@ -333,7 +334,7 @@ export function projectHousehold(rawPlan: HouseholdPlan): HouseholdProjection {
     const investmentGrowth = investmentsBeforeGrowth * rate(investmentRate);
     const passiveIncome = phase === "retirement" ? investmentsBeforeGrowth * rate(plan.passiveIncomeYieldRate) : 0;
     const householdSpending = (phase === "retirement"
-      ? nonNegative(plan.retirementSpendingAnnual) * Math.pow(1 + rate(plan.retirementSpendingInflationRate), yearIndex)
+      ? scenarioBudget(nonNegative(plan.retirementSpendingAnnual), yearIndex, scenario) * Math.pow(1 + rate(plan.retirementSpendingInflationRate), yearIndex)
       + dependantSpendingForYear(plan.spendingProfile, yearIndex, plan.retirementSpendingInflationRate) : 0) + extraCashCosts;
     const otherNetIncome = personRows.reduce((sum,p) => sum+p.otherTaxableIncome-p.otherIncomeTax,0);
     const nonSrsIncome = passiveIncome + totalCpfLifeIncome + totalCustomIncome + otherNetIncome;

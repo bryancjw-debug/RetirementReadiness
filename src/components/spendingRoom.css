@@ -1,0 +1,18 @@
+.spending-room { --border:var(--line); display:grid; gap:16px; padding:20px; margin-block:20px; border:1px solid var(--border); border-radius:8px; background:var(--surface); min-width:0; }
+.spending-room h3,.spending-room p { margin:0; }
+.spending-room p { overflow-wrap:anywhere; }
+.spending-room__choices { display:flex; flex-wrap:wrap; gap:8px; }
+.spending-room__choices button { min-height:44px; padding:8px 14px; border:1px solid var(--border); border-radius:6px; color:inherit; background:transparent; font:inherit; cursor:pointer; }
+.spending-room__choices button[aria-pressed="true"] { border-color:currentColor; font-weight:700; background:var(--surface-soft); }
+.spending-room__figures { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.spending-room__figures > div { display:grid; gap:6px; padding-block:12px; border-block:1px solid var(--border); }
+.spending-room__figures strong { font-size:26px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.spending-room details { border-top:1px solid var(--border); }
+.spending-room summary { min-height:44px; padding-block:12px; cursor:pointer; font-weight:650; }
+.spending-room details p { margin-block:8px 12px; }
+.spending-room__inputs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-block:12px; }
+.spending-room__inputs label { display:grid; gap:6px; min-width:0; }
+.spending-room__inputs input[type="number"] { width:100%; min-height:44px; padding:8px 10px; font:inherit; color:inherit; border:1px solid var(--border); border-radius:6px; background:transparent; }
+.spending-room__inputs .spending-room__check { display:flex; align-items:center; min-height:44px; }
+.spending-room :focus-visible { outline:2px solid currentColor; outline-offset:3px; }
+@media(max-width:600px) { .spending-room { padding:14px; } .spending-room__figures,.spending-room__inputs { grid-template-columns:minmax(0,1fr); } }

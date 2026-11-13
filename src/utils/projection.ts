@@ -1,3 +1,4 @@
+import { scenarioBudget, type SpendingScenario } from "./spendingScenario";
 import type {
   CpfLifePlan,
   CpfPrRateType,
@@ -870,7 +871,7 @@ export function accrueLockedSaInterest(cpf: CpfState, saInterest: number) {
   }
 }
 
-export function projectRetirement(rawInputs: RetirementInputs): RetirementProjection {
+export function projectRetirement(rawInputs: RetirementInputs, scenario?: SpendingScenario): RetirementProjection {
   const inputs = sanitizeInputs(rawInputs);
   const rows: RetirementYear[] = [];
   let cashBalance = inputs.currentCashSavings;
@@ -944,7 +945,11 @@ export function projectRetirement(rawInputs: RetirementInputs): RetirementProjec
     const customIncomeGenerated = phase === "retirement" ? calculateCustomIncome(inputs, age) : 0;
     const healthcareCost = calculateHealthcareCost(inputs, age);
     const dependantSpending = phase === "retirement" ? dependantSpendingForYear(inputs.spendingProfile, age-inputs.currentAge, inputs.retirementSpendingInflationRate) : 0;
-    const spendingNeed = calculateSpendingNeed(inputs, age) + dependantSpending + healthcareCost + insuranceCashExpense + housingCashPayment;
+    const usualSpending = calculateSpendingNeed(inputs, age);
+    const scenarioSpending = scenario && phase === "retirement"
+      ? scenarioBudget(inputs.retirementSpendingAnnual, age - inputs.currentAge, scenario) * Math.pow(1 + percentToRate(inputs.retirementSpendingInflationRate), age - inputs.currentAge)
+      : usualSpending;
+    const spendingNeed = scenarioSpending + dependantSpending + healthcareCost + insuranceCashExpense + housingCashPayment;
     const retirementIncomeBeforeSrs = phase === "retirement"
       ? passiveIncomeGenerated + cpfLifeIncome + customIncomeGenerated + tax.otherIncome - tax.otherTax
       : 0;

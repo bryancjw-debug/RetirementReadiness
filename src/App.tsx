@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { SpendingRoom } from "./components/SpendingRoom";
 import "./rates.css";
 import {
   Area,
@@ -416,6 +417,7 @@ export default function App() {
   const [experienceMode, setExperienceMode] = useState<ExperienceMode>("individual");
   const [onboardingAnswers, setOnboardingAnswers] = useState<OnboardingAnswers | null>(null);
   const projection = useMemo(() => projectRetirement(inputs), [inputs]);
+  const roomPlan = useMemo(() => ({ individual: inputs }), [inputs]);
   const processingDuration = useMemo(() => projectionProcessingDuration(inputs), [inputs]);
   const cpfPreview = cpfContributionForYear(inputs, inputs.currentAge);
   const retirementRow = projection.rows.find((row) => row.age === inputs.retirementAge);
@@ -1323,6 +1325,7 @@ export default function App() {
           <MetricCard label="Peak Wealth" value={formatCurrency(projection.summary.peakBalance)} note={`At age ${projection.summary.peakBalanceAge}`} />
         </div>
 
+        {projection.summary.status === "ready" ? <SpendingRoom plan={roomPlan} incomplete={Boolean(onboardingAnswers?.unknownBalances?.length)}/> :
         <section className="gap-card" aria-labelledby="gap-card-title">
           <div className="gap-card__copy">
             <p className="eyebrow">Explore the model</p>
@@ -1351,7 +1354,7 @@ export default function App() {
               tone="warn"
             />
           </div>
-        </section>
+        </section>}
 
         <details className="result-disclosure"><summary>What stands out</summary>
         <section className="insights-card" aria-labelledby="insights-title">
